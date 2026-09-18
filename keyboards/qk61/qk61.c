@@ -25,6 +25,53 @@ uint8_t Mac_Win_Point_Count = 0U;
 bool Test_Led = false;
 uint8_t Test_Colour = 0U;
 
+// ============================================================================
+// Soft sleep
+// ============================================================================
+// The vendor deep-sleep path hangs this MCU, so use a "soft sleep" instead:
+// the LEDs (via the RGB driver's System_Sleep_Mode check) are switched off
+// while the MCU and the RF module stay alive.  Any key press wakes it, and in
+// wireless mode it sleeps automatically after a period of inactivity.
+
+// Power-button combo (physical matrix position) pressed while Fn is held.
+#ifndef SOFT_SLEEP_COMBO_ROW
+#    define SOFT_SLEEP_COMBO_ROW 3 // Enter
+#endif
+#ifndef SOFT_SLEEP_COMBO_COL
+#    define SOFT_SLEEP_COMBO_COL 13
+#endif
+
+// Auto sleep delay while running on battery (wireless modes), milliseconds.
+#ifndef SOFT_SLEEP_WIRELESS_TIMEOUT_MS
+#    define SOFT_SLEEP_WIRELESS_TIMEOUT_MS (5UL * 60UL * 1000UL)
+#endif
+
+static bool     Soft_Sleep       = false;
+static uint32_t Last_Activity_Ms = 0;
+
+static void soft_sleep_enter(void) {
+    if (Soft_Sleep) {
+        return;
+    }
+    Soft_Sleep                        = true;
+    Keyboard_Status.System_Sleep_Mode = 1; // RGB driver cuts LED power
+    Led_Rf_Pair_Flg                   = false;
+}
+
+static void soft_sleep_exit(void) {
+    Soft_Sleep                        = false;
+    Keyboard_Status.System_Sleep_Mode = 0;
+    Last_Activity_Ms                  = timer_read32();
+
+    // The host may have dropped the BLE link while we were asleep.  Re-send
+    // the current mode to the RF module so it re-establishes the connection.
+    Mode_Synchronization_Signal = true;
+    Led_Rf_Pair_Flg             = true;
+    Show_Mode_Indicator         = true;
+    Mode_Indicator_Timer        = timer_read();
+}
+
+
 // QK61-specific LED indices
 #define LED_CAP_INDEX       (28)
 #define LED_WIN_L_INDEX     (54)
@@ -101,6 +148,18 @@ void notify_usb_device_state_change_user(struct usb_device_state usb_device_stat
 }
 
 void housekeeping_task_user(void) {
+    // Wireless auto-sleep after inactivity.
+    if (!Soft_Sleep && Keyboard_Info.Key_Mode != QMK_USB_MODE && timer_elapsed32(Last_Activity_Ms) >= SOFT_SLEEP_WIRELESS_TIMEOUT_MS) {
+        soft_sleep_enter();
+    }
+
+    // While soft-sleeping, keep the vendor "host idle -> RF sleep" path from
+    // powering down the RF module (there is no deep-sleep wake flow to bring
+    // it back, which would leave BT/2.4G unable to reconnect on wake).
+    if (Soft_Sleep) {
+        Usb_Change_Mode_Wakeup = false;
+    }
+
     es_chibios_user_idle_loop_hook();
 }
 
@@ -134,6 +193,8 @@ void board_init(void) {
 }
 
 void keyboard_post_init_kb(void) {
+    Last_Activity_Ms = timer_read32();
+
     if (keymap_config.nkro != Keyboard_Info.Nkro) {
         keymap_config.nkro = Keyboard_Info.Nkro;
     }
@@ -367,6 +428,20 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
     Usb_Change_Mode_Delay = 0;
     Usb_Change_Mode_Wakeup = false;
+
+    if (record->event.pressed) {
+        bool was_sleeping = Soft_Sleep;
+        Last_Activity_Ms  = timer_read32();
+        if (Soft_Sleep) {
+            soft_sleep_exit();
+        }
+        // Fn + power combo enters soft sleep (only when already awake so the
+        // wake key itself does not immediately put it back to sleep).
+        if (!was_sleeping && Key_Fn_Status && record->event.key.row == SOFT_SLEEP_COMBO_ROW && record->event.key.col == SOFT_SLEEP_COMBO_COL) {
+            soft_sleep_enter();
+            return false;
+        }
+    }
 
     if (Test_Led) {
         if ((keycode != KC_SPC) && (keycode != MO(2)) && (keycode != MO(3)) && (keycode != KC_LCTL)) {

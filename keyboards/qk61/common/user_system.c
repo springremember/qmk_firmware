@@ -184,6 +184,13 @@ void es_chibios_user_idle_loop_hook(void) {
     // Check for mode switch changes
     Check_Mode_Switch_Changed();
 
+#ifdef DISABLE_CUSTOM_SLEEP
+    // The vendor deep-sleep/wake path hangs this MCU: after the cable is
+    // unplugged the keyboard dies and does not recover when it is plugged
+    // back in.  Skip it, and use the soft sleep implemented in qk61.c.
+    return;
+#endif
+
 	if(Keyboard_Info.Key_Mode == QMK_USB_MODE) {
         if (Usb_Dis_Connect) {
             Usb_Dis_Connect = false;
@@ -469,31 +476,28 @@ uint8_t Read_Mode_Switch_Position(void) {
 void Check_Mode_Switch_Changed(void) {
     uint8_t current_position = Read_Mode_Switch_Position();
 
-    if (current_position != Current_Mode_Switch_Position) {
-        if (!Mode_Switch_Changed) {
-            // Start debounce timer
-            Mode_Switch_Changed = true;
-            Mode_Switch_Debounce_Timer = timer_read();
-            Last_Mode_Switch_Position = Current_Mode_Switch_Position;
-            Current_Mode_Switch_Position = current_position;
-        } else {
-            // Check if debounce time has passed
-            if (timer_elapsed(Mode_Switch_Debounce_Timer) >= MODE_SWITCH_DEBOUNCE_TIME) {
-                // Confirm the change is stable
-                if (current_position == Current_Mode_Switch_Position) {
-                    Handle_Mode_Switch_Change(Current_Mode_Switch_Position);
-                    Mode_Switch_Changed = false;
-                } else {
-                    // Reading changed again, restart debounce
-                    Current_Mode_Switch_Position = current_position;
-                    Mode_Switch_Debounce_Timer = timer_read();
-                }
-            }
-        }
-    } else {
-        // Position is stable, reset debounce
+    if (current_position == Current_Mode_Switch_Position) {
+        // Position is stable and matches the last confirmed one.
         Mode_Switch_Changed = false;
+        return;
     }
+
+    if (!Mode_Switch_Changed) {
+        // Start debounce timer on the first observation of a new position.
+        Mode_Switch_Changed        = true;
+        Mode_Switch_Debounce_Timer = timer_read();
+        return;
+    }
+
+    if (timer_elapsed(Mode_Switch_Debounce_Timer) < MODE_SWITCH_DEBOUNCE_TIME) {
+        return;
+    }
+
+    // Debounce elapsed and the new position is still present - commit it.
+    Mode_Switch_Changed          = false;
+    Last_Mode_Switch_Position    = Current_Mode_Switch_Position;
+    Current_Mode_Switch_Position = current_position;
+    Handle_Mode_Switch_Change(current_position);
 }
 
 void Handle_Mode_Switch_Change(uint8_t new_position) {

@@ -77,3 +77,8 @@
 
 #define MAC_COL                     (2)
 #define MAC_ROL                     (3)
+
+// The vendor deep-sleep/wake path hangs this MCU (keyboard dies after the
+// cable is unplugged and does not recover on replug).  Disable it; qk61.c
+// provides a safe "soft sleep" (LEDs off, MCU/RF stay alive, any key wakes).
+#define DISABLE_CUSTOM_SLEEP 1
