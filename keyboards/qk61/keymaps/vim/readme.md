@@ -9,6 +9,8 @@
 - `keyboards/qk61/keymaps/vim/qmk-vim/` → `git@github.com:springremember/qmk-vim.git`（子模块）
 - myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
 
+> **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
+
 ## 一、键位与层
 
 共 **5 层**：
@@ -196,3 +198,24 @@ make qk61:vim:flash
 - 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim
 - 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-myfn
 - QK61 官方移植参考：https://github.com/springremember/qmk_firmware_QK61
+
+## 十二、问题记录（V1.0）
+
+> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim/CHANGES.md` 的「V1.0 问题记录」。
+> **V1.0 固件另存改名**：`output/qk61_vim_v1.0.bin` / `.hex`（与 `output/qk61_vim.bin` 内容一致，仅作版本留档，避免被后续重构覆盖）。
+
+### 通用（引擎，两键盘共有）
+- **E1 dd**：C1 的裸 `Ctrl+X` 只在 VSCode 类有效（Notepad 无效）；末行曾是难点。V1.0 定为 `Home×2 + Shift+End + Ctrl+X + Backspace`：**末行可删**、`p` 可粘；代价是**首行留空行**。
+- **E2 卡 Shift**：引擎无条件回写修饰键会放大一次丢失的释放；触发点 `pr_boot_combo` 带 Shift 跳 bootloader → 修复为跳转前清报告。
+- **E3 Alt+Tab 卡 Tab**：只处理按下、先松 Alt 时 Tab 释放被引擎吞 → 对称透传 + 取消半途操作符。
+- **E4 双撤销**：dd 是两次编辑 → `u`/重做自动双步（间隔 50ms）。
+- **E5 子模块错配**：bump 后必须重编并校验产物哈希。
+- **E6 集成**：`layer_count` 变更需重导 VIA layout、重编、注意 EEPROM。
+
+### QK61 特有
+- Tab 用**无条件透传**（`if (KC_TAB) return true;`），因此**没有** NUT65 的卡 Tab 问题。
+- `_FN`：`-`/`=`=F11/F12、`[`/`]`=音量（V1.0）；`Fn+1..0`=F1..F10。
+- 移除「右 `Shift`+数字/`-`/`=` 出 F 区」（保留 `Shift+Esc`）。
+- **保留** Insert 模式「右 `Ctrl`+数字 = F1..F10」（QK61 有右 Ctrl）。
+- 原厂 Fn 层（layer 2/3）逐键保留；原厂刷机 = 按住 `Esc` 插线 / PCB Reset（无 Fn 组合）。
+- 与 NUT65 的专属差异（Enter 长按右键 / Ctrl+Alt+Del / 亮度）**不互相**同步。
