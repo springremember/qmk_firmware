@@ -80,11 +80,11 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LSFT, KC_NO,    KC_NO,    RM_SATD,   RM_SATU,   KC_DEL,   KC_END,   KC_PGDN, RM_VALD,  RM_VALU,            KC_UP,              QK_BAT,
         KC_LCTL, KC_LALT,  KC_LGUI,                        RM_TOGG,                               KC_LEFT,  KC_DOWN,  KC_RGHT,  KC_NO
     ),
-    // 新 Fn 层（myfn 约定，见 qmk-myfn 文档）：音量 / 蓝牙·2.4G 切换；其余透明；
+    // 新 Fn 层（myfn 约定，见 qmk-myfn 文档）：F1..F12 / 音量 / 蓝牙·2.4G 切换；其余透明；
     // Fn+Space 电量、Fn+T 空跑（QK61 有物理开关）由 process_record_myfn() 处理。
     [_FN] = LAYOUT_60_ansi(
-        _______, KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_VOLD, KC_VOLU, _______,
-        _______, MD_BLE1, MD_BLE2, MD_BLE3, MD_24G,  _______, _______, _______, _______, _______, _______, _______, _______, _______,
+        _______, KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,  _______,
+        _______, MD_BLE1, MD_BLE2, MD_BLE3, MD_24G,  _______, _______, _______, _______, _______, _______, KC_VOLD, KC_VOLU, _______,
         _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______,
         _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______,          _______,
         _______, _______, _______,                     _______,                              _______, _______, _______,          _______
@@ -189,7 +189,8 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 /* ===== myfn 约定（内联实现；约定文本见 qmk-myfn 仓库文档）=====
  * 规则：前置满足→执行；前置不满足→吞键（空跑）；未声明→透传。
  * QK61：Fn+Space=电量（有电池→执行）；Fn+T=切有线（QK61 有物理开关→空跑=吞）；
- *       Q/W/E/R 由 qk61.c 处理；`-`/`=` 音量、Caps、Esc 由各自分支处理。 */
+ *       Q/W/E/R 由 qk61.c 处理；F 区/音量（`-`/`=`=F11/F12、`[`/`]`=音量）是 `_FN` 层键码直接输出；
+ *       Caps、Esc 由各自分支处理。 */
 static bool fn_batt_held = false;
 
 static bool process_record_myfn(uint16_t keycode, keyrecord_t *record) {
@@ -344,9 +345,10 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
     return true;
 }
 
-// Right Shift combos: Right Shift + Esc = grave (add left Shift for ~),
-// Right Shift + 1..0/-/= = F1..F12. Any other key keeps normal right-shift
-// behaviour. Always mask with the 8-bit MOD_BIT_* constants.
+// Shift + Esc combos: Left Shift + Esc = ~ (Right Shift may also be held),
+// Right Shift + Esc = grave. Any other key keeps normal shift behaviour.
+// (The old Right Shift + 1..0/-/= = F1..F12 mapping was removed now that the
+// myfn Fn layer provides F1..F12.) Always mask with the 8-bit MOD_BIT_* constants.
 // The key consumed on press is remembered so its release is also swallowed even
 // if Shift was released first.
 static uint16_t shift_combo_kc = KC_NO;
@@ -361,22 +363,10 @@ static bool pr_shift_combos(uint16_t keycode, keyrecord_t *record, uint8_t mods)
             shift_combo_kc = keycode;
             return true;
         }
-        if ((mods & MOD_BIT_RSHIFT) &&
-            (keycode == KC_ESC || (keycode >= KC_1 && keycode <= KC_0) || keycode == KC_MINS || keycode == KC_EQL)) {
-            uint16_t repl;
-            if (keycode == KC_ESC) {
-                repl = KC_GRV;
-            } else if (keycode == KC_MINS) {
-                repl = KC_F11;
-            } else if (keycode == KC_EQL) {
-                repl = KC_F12;
-            } else {
-                uint8_t num = (keycode == KC_0) ? 10 : (keycode - KC_1 + 1);
-                repl        = KC_F1 + num - 1;
-            }
+        if ((mods & MOD_BIT_RSHIFT) && (keycode == KC_ESC)) {
             uint8_t saved_mods = get_mods();
             clear_mods();
-            tap_code16(repl);
+            tap_code16(KC_GRV); // Right Shift + Esc = `
             set_mods(saved_mods);
             shift_combo_kc = keycode;
             return true;
