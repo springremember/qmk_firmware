@@ -15,16 +15,21 @@
 | 2 | Win Fn |
 | 3 | Mac Fn |
 
-Base 层 Esc 由 `QK_GESC` 改为 **`KC_ESC`**（供 vim 拦截）；`~` 仍可在 Fn 层左上 `[2,0]=KC_GRV` 输入。其余键位与厂商默认逐键一致。
+Base 层 Esc 由 `QK_GESC` 改为 **`KC_ESC`**（供 vim 拦截）；`~` 仍可在 Fn 层左上 `[2,0]=KC_GRV` 输入。
+
+Win Fn 层（layer 2）的 `-` / `=` 改为 **`KC_VOLD` / `KC_VOLU`**（对齐 NUT65 `_FL`；Mac Fn 层 layer 3 厂商默认已是音量减/增）。其余键位与厂商默认逐键一致。
 
 ### 底排方案（Base 层，Win/Mac 同步）
 
 | 物理位置 | 厂商默认 | 本方案 | 短按 | 长按 |
 | :--- | :--- | :--- | :--- | :--- |
-| 原 Menu | `KC_APP` | `LT(2, KC_LEFT)` | `←` | Fn 层 |
-| 右 Ctrl | `KC_RCTL` | `MT(MOD_RCTL, KC_DOWN)` | `↓` | 右 Ctrl |
+| 右 Alt | `KC_RALT` | `MO(2)` | — | Fn 层 |
+| 原 Menu | `KC_APP` | `MT(MOD_RALT, KC_LEFT)` | `←`（Normal 下=鼠标左移） | 右 Alt |
+| 右 Ctrl | `KC_RCTL` | `MT(MOD_RCTL, KC_DOWN)` | `↓`（Normal 下=鼠标下移） | 右 Ctrl |
 | 原 Fn | `MO(2)` | `MENU_TAP_RIGHT` | `→`（Normal 下=鼠标右移） | `Enter`（仅 Normal） |
-| 右 Shift | `KC_RSFT` | `MT(MOD_RSFT, KC_UP)` | `↑` | 右 Shift |
+| 右 Shift | `KC_RSFT` | `MT(MOD_RSFT, KC_UP)` | `↑`（Normal 下=鼠标上移） | 右 Shift |
+
+> 物理右 Alt 位改为纯 Fn（`MO(2)`，不带方向/鼠标）；右 Alt 移到原 Menu 位，方向键与鼠标功能保留在原 Menu 位（Win：`MT(MOD_RALT, KC_LEFT)`；Mac：`MO(3)` 与 `MT(MOD_RGUI, KC_LEFT)`）。
 
 - 判定阈值 = QMK `TAPPING_TERM`（默认 **200ms**）。
 - `Fn` / 右 Ctrl / 右 Shift 使用 QMK 原生 `LT` / `MT`；Menu 键为自定义 tap-hold（`MENU_TAP_RIGHT`）。
