@@ -393,6 +393,56 @@ void User_Test_Colour_Show(void){
     rgb_matrix_driver_set_color_all(Test_R, Test_G, Test_B);
 }
 
+// ============================================================================
+// Logo lighting (VIA channel 2, rgblight-compatible custom values)
+// ============================================================================
+// The three side/logo LEDs at the end of the WS2812 chain (indices 61..63,
+// flags == 0 in g_led_config) are exposed through VIA's "logo" menu, which
+// speaks the rgblight custom-value protocol (channel 2).  This firmware only
+// uses rgb_matrix, so the VIA values are received here and the logo LEDs are
+// rendered on top of the rgb_matrix effect.
+#define LOGO_LED_FIRST 61
+#define LOGO_LED_COUNT 3
+
+static bool    logo_on    = false; // false: leave the logo LEDs to the main effect
+static uint8_t logo_mode  = 0;     // 0 none, 1 wave, 2 fixed wave, 3 spectrum, 4 breathe, 5 light, 6 shutdown
+static uint8_t logo_speed = 2;     // 0..4
+static uint8_t logo_val   = 200;   // 0..200 (matches the via.json range)
+static uint8_t logo_hue   = 0;     // 0..255
+static uint8_t logo_sat   = 255;   // 0..255
+
+static uint8_t logo_tri(uint8_t x) {
+    return x < 128 ? (uint8_t)(x * 2) : (uint8_t)((255 - x) * 2);
+}
+
+static void logo_render(uint8_t led_min, uint8_t led_max) {
+    if (!logo_on) return; // "none": the logo LEDs follow the main rgb_matrix effect
+
+    uint8_t speed = 1 + (logo_speed > 4 ? 4 : logo_speed); // 1..5
+    uint8_t wave  = (uint8_t)(timer_read() >> (6 - speed));
+
+    for (uint8_t i = 0; i < LOGO_LED_COUNT; i++) {
+        uint8_t idx = LOGO_LED_FIRST + i;
+        if (idx < led_min || idx >= led_max) continue;
+
+        uint8_t h = logo_hue;
+        uint8_t s = logo_sat;
+        uint8_t v = 0;
+        switch (logo_mode) {
+            case 1: v = logo_tri((uint8_t)(wave + i * 85)); break;      // wave
+            case 2: v = logo_tri((uint8_t)(i * 85));        break;      // fixed wave
+            case 3: h = (uint8_t)(logo_hue + wave + i * 85); v = 255; break; // spectrum
+            case 4: v = logo_tri(wave);                     break;      // breathe
+            case 5: v = 255;                                break;      // light
+            default: v = 0;                                 break;      // shutdown / off
+        }
+
+        hsv_t hsv = {.h = h, .s = s, .v = v};
+        rgb_t rgb = hsv_to_rgb(hsv);
+        rgb_matrix_set_color(idx, (uint16_t)rgb.r * logo_val / 200, (uint16_t)rgb.g * logo_val / 200, (uint16_t)rgb.b * logo_val / 200);
+    }
+}
+
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     if (User_Power_Low) {
         Led_Power_Low_Show();
@@ -423,6 +473,73 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     }
 
     return false;
+}
+
+bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
+    logo_render(led_min, led_max);
+    return rgb_matrix_indicators_advanced_user(led_min, led_max);
+}
+
+// VIA custom values: channel 2 (rgblight) is not provided by QMK unless
+// RGBLIGHT_ENABLE is set, so handle it here for the logo lighting.
+void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
+    uint8_t *command_id        = &data[0];
+    uint8_t *channel_id        = &data[1];
+    uint8_t *value_id_and_data = &data[2];
+
+    if (*channel_id == id_qmk_rgblight_channel) {
+        switch (*command_id) {
+            case id_custom_set_value:
+                switch (value_id_and_data[0]) {
+                    case id_qmk_rgblight_brightness:
+                        logo_val = value_id_and_data[1];
+                        break;
+                    case id_qmk_rgblight_effect:
+                        logo_mode = value_id_and_data[1];
+                        logo_on   = (value_id_and_data[1] != 0);
+                        break;
+                    case id_qmk_rgblight_effect_speed:
+                        logo_speed = value_id_and_data[1];
+                        break;
+                    case id_qmk_rgblight_color:
+                        logo_hue = value_id_and_data[1];
+                        logo_sat = value_id_and_data[2];
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case id_custom_get_value:
+                switch (value_id_and_data[0]) {
+                    case id_qmk_rgblight_brightness:
+                        value_id_and_data[1] = logo_val;
+                        break;
+                    case id_qmk_rgblight_effect:
+                        value_id_and_data[1] = logo_on ? logo_mode : 0;
+                        break;
+                    case id_qmk_rgblight_effect_speed:
+                        value_id_and_data[1] = logo_speed;
+                        break;
+                    case id_qmk_rgblight_color:
+                        value_id_and_data[1] = logo_hue;
+                        value_id_and_data[2] = logo_sat;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case id_custom_save:
+                break;
+            default:
+                *command_id = id_unhandled;
+                break;
+        }
+        return;
+    }
+
+    // Not a channel we handle: report unhandled (matches the QMK default).
+    *command_id = id_unhandled;
+    (void)length;
 }
 
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
