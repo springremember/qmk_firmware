@@ -51,7 +51,7 @@ Base 层 Esc 由 `QK_GESC` 改为 **`KC_ESC`**（供 vim 拦截）。
 - 每次刷入**新编译**固件后首次开机，用完整 `QMK_BUILDDATE` 哈希与 EEPROM 记录比较，不同则 `dynamic_keymap_reset()` 重灌编译键位（VIA magic 只用日期，同日多次编译不触发）。
 - `DYNAMIC_KEYMAP_LAYER_COUNT = 5`（第 5 层必须同步调大，否则触发 QMK 静态断言）。
 - **`Fn` + `Esc` 长按 3 秒 = 重置 EEPROM**（`eeconfig_init()`）并重启；短按 `Fn`+`Esc` 不输出任何键（先松 Fn 也不会漏出真 Esc）。
-- **休眠/唤醒/重连**：沿用**厂商原厂睡眠方案**（未做任何自定义软睡眠；`DISABLE_CUSTOM_SLEEP` 已移除）。
+- **休眠/唤醒/重连**：保留 `DISABLE_CUSTOM_SLEEP`（厂商深睡会挂死本 MCU），改由 `qk61.c` 的 **C1 RF 状态机**管理：无线空闲 5 分钟 → 拉低 SDB 断电 RF；任意按键 / 插入 USB → `Init_Gpio_Infomation()` 恢复 SDB → 重握手 → 重发当前模式。另含**插线自动切 USB 并重新枚举**。**无 Fn+Enter 手动睡眠**。
 
 ## 二、Vim 模式与开关
 
@@ -157,7 +157,7 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 ## 七、与 NUT65 的差异（未移植项）
 
 - **鼠标（部分移植）**：保留底排方向键移动指针、Space 左键、Enter 右键；未移植 NUT65 的 End 键右键、左右方向键同按右键等。
-- **休眠与电源管理**：直接沿用**厂商原厂睡眠/唤醒/重连**（`common/user_system.c` 等，未做任何自定义软睡眠）。
+- **休眠与电源管理**：QK61 使用自研 **C1 RF 状态机**（仅在 `qk61.c`，保留 `DISABLE_CUSTOM_SLEEP`）；NUT65 仍为厂商原厂方案。
 - NUT65 keymap 的 `rgb_record` 灯效录制、编码器音量等 QK61 不存在的部分未引入。
 
 ## 八、文件结构

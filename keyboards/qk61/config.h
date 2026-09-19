@@ -77,3 +77,9 @@
 
 #define MAC_COL                     (2)
 #define MAC_ROL                     (3)
+
+// The vendor deep-sleep/wake path hangs this MCU (keyboard dies after the
+// cable is unplugged and does not recover on replug).  Disable it; qk61.c
+// runs its own "C1" RF power state machine instead (cuts/restores the RF
+// module's SDB rail and re-handshakes SPI+mode on wake).
+#define DISABLE_CUSTOM_SLEEP 1

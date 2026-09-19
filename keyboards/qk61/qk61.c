@@ -25,6 +25,155 @@ uint8_t Mac_Win_Point_Count = 0U;
 bool Test_Led = false;
 uint8_t Test_Colour = 0U;
 
+// ============================================================================
+// C1 RF power / sleep state machine
+// ============================================================================
+// The vendor deep-sleep body is disabled (config.h: DISABLE_CUSTOM_SLEEP), but
+// its asynchronous RF cut in Get_Spi_Return_Data()/User_Sleep() is still
+// reachable.  We own the sleep decision here: the vendor cut is kept disarmed
+// at all times except while deliberately entering sleep, and wake always
+// restores SDB through Init_Gpio_Infomation() before re-handshaking SPI and
+// re-sending the current mode to the module.
+
+// Auto sleep delay while running on battery (wireless modes), milliseconds.
+#ifndef RF_SLEEP_INACTIVITY_MS
+#    define RF_SLEEP_INACTIVITY_MS (5UL * 60UL * 1000UL)
+#endif
+// Let the vendor async cut land first; force it if the module never reports idle.
+#ifndef RF_ENTER_GRACE_MS
+#    define RF_ENTER_GRACE_MS 150U
+#endif
+#ifndef RF_WAKE_HANDSHAKE_TIMEOUT_MS
+#    define RF_WAKE_HANDSHAKE_TIMEOUT_MS 1200U
+#endif
+#ifndef RF_WAKE_SYNC_TIMEOUT_MS
+#    define RF_WAKE_SYNC_TIMEOUT_MS 800U
+#endif
+#ifndef RF_WAKE_POWER_RETRY_MAX
+#    define RF_WAKE_POWER_RETRY_MAX 2U
+#endif
+#ifndef RF_WAKE_SYNC_RETRY_MAX
+#    define RF_WAKE_SYNC_RETRY_MAX 3U
+#endif
+#ifndef RF_RECOVER_RETRY_MAX
+#    define RF_RECOVER_RETRY_MAX 1U
+#endif
+
+typedef enum {
+    RF_ST_AWAKE = 0,      // RF powered, SPI normal, vendor cut disarmed
+    RF_ST_ENTER,          // vendor cut armed, grace deadline running
+    RF_ST_ASLEEP,         // SDB low, SPI gated, waiting for a wake source
+    RF_ST_WAKE_HANDSHAKE, // SDB restored, waiting for the SPI handshake
+    RF_ST_WAKE_SYNC,      // handshake done, waiting for the module to accept mode
+} rf_power_state_t;
+
+static rf_power_state_t Rf_State            = RF_ST_AWAKE;
+static uint32_t         Rf_Last_Activity_Ms = 0;
+static uint32_t         Rf_Deadline_Ms      = 0;
+static bool             Rf_Wake_Request     = false;
+static uint8_t          Rf_Power_Retry      = 0;
+static uint8_t          Rf_Sync_Retry       = 0;
+static uint8_t          Rf_Recover_Retry    = 0;
+static bool             Rf_Usb_Was_Present  = false;
+
+static void rf_enter_begin(void) {
+    // Never cut power mid-transfer or during an EEPROM write.
+    if (Spi_Send_Recv_Flg || gpio_read_pin(ES_SPI_ACK_IO) || Reset_Save_Flash) {
+        return;
+    }
+
+    Rf_State       = RF_ST_ENTER;
+    Rf_Deadline_Ms = timer_read32() + RF_ENTER_GRACE_MS;
+
+    // Lights off, block the vendor sleep-ACK branch, isolate the SPI state
+    // machine.  The vendor async cut may still fire and power down the RF.
+    Keyboard_Status.System_Sleep_Mode  = 1;
+    Keyboard_Status.System_Work_Status = 0;
+    Led_Rf_Pair_Flg                    = false;
+    Show_Mode_Indicator                = false;
+
+    Usb_Change_Mode_Delay  = 0;
+    Usb_Change_Mode_Wakeup = true; // allow the vendor cut during this grace window
+}
+
+static void rf_enter_finish(void) {
+    Usb_Change_Mode_Wakeup = false;
+    Usb_Change_Mode_Delay  = 0;
+    Init_Spi_Power_Up      = true; // gate Spi_* while the RF is unpowered
+
+    User_Sleep(); // SDB=0, WUKEUP=0, LED power off
+    Rf_State = RF_ST_ASLEEP;
+}
+
+static void rf_enter_cancel(void) {
+    Usb_Change_Mode_Wakeup            = false;
+    Usb_Change_Mode_Delay             = 0;
+    Keyboard_Status.System_Sleep_Mode = 0;
+    Rf_State                          = RF_ST_AWAKE;
+    Rf_Last_Activity_Ms               = timer_read32();
+}
+
+static void rf_wake_power_steps(void) {
+    // Block every SPI user and drop any transfer that was in flight.
+    Init_Spi_Power_Up    = true;
+    Init_Spi_100ms_Delay = 0;
+    Spi_Interval         = SPI_DELAY_RF_TIME;
+    Spi_Send_Recv_Flg    = 0;
+    Repet_Send_Count     = 0;
+    Send_Key_Type        = SPI_NACK;
+
+    Keyboard_Status.System_Work_Status = 0;
+    Keyboard_Status.System_Sleep_Mode  = 0;
+    Usb_Change_Mode_Wakeup             = false;
+    Usb_Change_Mode_Delay              = 0;
+
+    // Restore SDB(A3)/WUKEUP(D1)/LED power and the ACK EXTI.  This is the only
+    // path that drives SDB high again.
+    __disable_irq();
+    Init_Gpio_Infomation();
+    __enable_irq();
+
+    Rf_Deadline_Ms = timer_read32() + RF_WAKE_HANDSHAKE_TIMEOUT_MS;
+    Rf_State       = RF_ST_WAKE_HANDSHAKE;
+}
+
+static void rf_wake_sync_begin(void) {
+    Rf_Sync_Retry               = 0;
+    Mode_Synchronization_Signal = true;
+    Led_Rf_Pair_Flg             = true;
+    Show_Mode_Indicator         = true;
+    Mode_Indicator_Timer        = timer_read();
+
+    Rf_Deadline_Ms = timer_read32() + RF_WAKE_SYNC_TIMEOUT_MS;
+    Rf_State       = RF_ST_WAKE_SYNC;
+}
+
+static void rf_recover(void) {
+    Init_Spi_Power_Up = true;
+    Board_Wakeup_Init();
+    Rf_Deadline_Ms = timer_read32() + RF_WAKE_HANDSHAKE_TIMEOUT_MS;
+    Rf_State       = RF_ST_WAKE_HANDSHAKE;
+}
+
+static void rf_usb_hotplug_check(void) {
+    bool present = gpio_read_pin(ES_USB_POWER_IO);
+    if (present && !Rf_Usb_Was_Present && Keyboard_Info.Key_Mode != QMK_USB_MODE) {
+        // Cable inserted: switch to USB and fully re-enumerate the device.
+        Keyboard_Info.Key_Mode = QMK_USB_MODE;
+        Spi_Send_Commad(USER_SWITCH_USB_MODE);
+        es_restart_usb_driver();
+        Save_Flash_Set();
+        Led_Rf_Pair_Flg      = false;
+        Show_Mode_Indicator  = true;
+        Mode_Indicator_Timer = timer_read();
+        // Make sure the RF module is powered again (SDB restored) even if we
+        // were asleep, so a later switch back to wireless still works.
+        Rf_Wake_Request = true;
+    }
+    Rf_Usb_Was_Present = present;
+}
+
+
 // QK61-specific LED indices
 #define LED_CAP_INDEX       (28)
 #define LED_WIN_L_INDEX     (54)
@@ -101,6 +250,89 @@ void notify_usb_device_state_change_user(struct usb_device_state usb_device_stat
 }
 
 void housekeeping_task_user(void) {
+    uint32_t now = timer_read32();
+
+    // Own the RF sleep decision: keep the vendor 3 s auto-cut disarmed at all
+    // times except while deliberately entering sleep.
+    if (Rf_State != RF_ST_ENTER) {
+        Usb_Change_Mode_Wakeup = false;
+        Usb_Change_Mode_Delay  = 0;
+    }
+
+    // Cable insertion -> switch to USB and re-enumerate the device.
+    rf_usb_hotplug_check();
+
+    switch (Rf_State) {
+        case RF_ST_AWAKE:
+            if (Keyboard_Info.Key_Mode != QMK_USB_MODE && timer_elapsed32(Rf_Last_Activity_Ms) >= RF_SLEEP_INACTIVITY_MS) {
+                rf_enter_begin();
+            }
+            break;
+
+        case RF_ST_ENTER:
+            if (Rf_Wake_Request) {
+                Rf_Wake_Request = false;
+                rf_enter_cancel();
+            } else if (timer_elapsed32(Rf_Deadline_Ms) >= RF_ENTER_GRACE_MS) {
+                rf_enter_finish();
+            }
+            break;
+
+        case RF_ST_ASLEEP:
+            if (Rf_Wake_Request) {
+                Rf_Wake_Request = false;
+                rf_wake_power_steps();
+            }
+            break;
+
+        case RF_ST_WAKE_HANDSHAKE:
+            if (!Init_Spi_Power_Up) {
+                rf_wake_sync_begin();
+            } else if (timer_elapsed32(Rf_Deadline_Ms) >= RF_WAKE_HANDSHAKE_TIMEOUT_MS) {
+                if (Rf_Power_Retry < RF_WAKE_POWER_RETRY_MAX) {
+                    Rf_Power_Retry++;
+                    rf_wake_power_steps();
+                } else if (Rf_Recover_Retry < RF_RECOVER_RETRY_MAX) {
+                    Rf_Recover_Retry++;
+                    rf_recover();
+                } else {
+                    mcu_reset();
+                }
+            }
+            break;
+
+        case RF_ST_WAKE_SYNC:
+            if (!Init_Spi_Power_Up && Keyboard_Status.System_Work_Mode == Keyboard_Info.Key_Mode) {
+                Rf_State            = RF_ST_AWAKE;
+                Rf_Power_Retry      = 0;
+                Rf_Sync_Retry       = 0;
+                Rf_Recover_Retry    = 0;
+                Rf_Last_Activity_Ms = now;
+            } else if (timer_elapsed32(Rf_Deadline_Ms) >= RF_WAKE_SYNC_TIMEOUT_MS) {
+                if (Rf_Sync_Retry < RF_WAKE_SYNC_RETRY_MAX) {
+                    Rf_Sync_Retry++;
+                    Mode_Synchronization_Signal = true;
+                    Rf_Deadline_Ms              = now + RF_WAKE_SYNC_TIMEOUT_MS;
+                } else {
+                    // Powered and mode re-sent; the module may just be slow to
+                    // reconnect.  Operate normally instead of resetting.
+                    Rf_State            = RF_ST_AWAKE;
+                    Rf_Power_Retry      = 0;
+                    Rf_Sync_Retry       = 0;
+                    Rf_Recover_Retry    = 0;
+                    Rf_Last_Activity_Ms = now;
+                }
+            } else {
+                // Keep re-asserting until the module accepts the mode.
+                Mode_Synchronization_Signal = true;
+            }
+            break;
+
+        default:
+            Rf_State = RF_ST_AWAKE;
+            break;
+    }
+
     es_chibios_user_idle_loop_hook();
 }
 
@@ -134,6 +366,9 @@ void board_init(void) {
 }
 
 void keyboard_post_init_kb(void) {
+    Rf_Last_Activity_Ms = timer_read32();
+    Rf_Usb_Was_Present  = gpio_read_pin(ES_USB_POWER_IO);
+
     if (keymap_config.nkro != Keyboard_Info.Nkro) {
         keymap_config.nkro = Keyboard_Info.Nkro;
     }
@@ -485,8 +720,15 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
 }
 
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
-    Usb_Change_Mode_Delay = 0;
+    Usb_Change_Mode_Delay  = 0;
     Usb_Change_Mode_Wakeup = false;
+
+    if (record->event.pressed) {
+        Rf_Last_Activity_Ms = timer_read32();
+        if (Rf_State == RF_ST_ASLEEP || Rf_State == RF_ST_ENTER) {
+            Rf_Wake_Request = true;
+        }
+    }
 
     if (Test_Led) {
         if ((keycode != KC_SPC) && (keycode != MO(2)) && (keycode != MO(3)) && (keycode != KC_LCTL)) {
