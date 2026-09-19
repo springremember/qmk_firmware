@@ -714,7 +714,9 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                     }
                 }
             }
-        } return true;
+            // Let the keymap see Space (vim Normal-mode mouse click/drag).
+            return process_record_user(keycode, record);
+        }
         case KC_LGUI: {                                             //key_win_l
             if (Keyboard_Info.Win_Lock) {
                 record->event.pressed = false;
