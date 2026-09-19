@@ -2,6 +2,8 @@
 
 基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
+> **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十七节**；V1.0 固件另存 `output/leku_nut65_vim_v1.0.bin`（避免被后续重构覆盖）。
+
 ## 一、模式与开关
 
 ### Vim 永久开启
@@ -257,3 +259,26 @@ make leku/nut65:vim:flash
 - QMK：https://github.com/qmk/qmk_firmware
 - 厂家：https://github.com/hangshengkeji/qmk_firmware
 - 社区 QMK-VIM：https://github.com/andrewjrae/qmk-vim
+- 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim
+- 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-myfn
+
+## 十七、问题记录（V1.0）
+
+> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim/CHANGES.md` 的「V1.0 问题记录」。
+> **V1.0 固件另存改名**：`output/leku_nut65_vim_v1.0.bin` / `.hex`（与 `output/leku_nut65_vim.bin` 内容一致，仅作版本留档，避免被后续重构覆盖）。
+
+### 通用（引擎，两键盘共有）
+- **E1 dd**：C1 的裸 `Ctrl+X` 只在 VSCode 类有效（Notepad 无效）；末行曾是难点。V1.0 定为 `Home×2 + Shift+End + Ctrl+X + Backspace`：**末行可删**、`p` 可粘；代价是**首行留空行**。
+- **E2 卡 Shift**：引擎无条件回写修饰键会放大一次丢失的释放；触发点 `pr_boot_combo` 带 Shift 跳 bootloader → 修复为跳转前清报告。
+- **E3 Alt+Tab 卡 Tab**：只处理按下、先松 Alt 时 Tab 释放被引擎吞 → 对称透传 + 取消半途操作符。
+- **E4 双撤销**：dd 是两次编辑 → `u`/重做自动双步（间隔 50ms）。
+- **E5 子模块错配**：bump 后必须重编并校验产物哈希。
+- **E6 集成**：`layer_count` 5→6 需重导 VIA layout、重编 default/vim、注意 EEPROM；分支裁剪误删 `keyboards/linker/wireless` 已恢复。
+
+### NUT65 特有
+- Alt+Tab 透传从导入起就是**有条件**的（仅 Alt 按住时）→ 「先松 Alt」时 Tab 释放被引擎吞 → 卡 Tab 的**根源**；V1.0 用 `alt_tab_held` 修好。
+- 刷机组合 **`Fn`+右`Shift`+`Esc`**（原厂层叠语义）由 `pr_boot_combo` 实现；**跳转前 `clear_keyboard()`**，否则把 Shift 卡在宿主（E2）。
+- `_FN`：`-`/`=`=F11/F12、`[`/`]`=音量；`Fn+1..0`=F1..F10。
+- 移除「`Shift`+数字/`-`/`=` 出 F 区」与「Insert 模式右 `Ctrl`+数字」（NUT65 **无右 Ctrl**）。
+- rgbrec：厂商 `nut65.c` 的 Fn 特判必须含 `MO(_FN)`，否则 RGB 录制中 Fn 被吞、释放卡层。
+- 厂商 `_FL`/`_MFL`/`_DEFA` 原样保留、无进入途径。
