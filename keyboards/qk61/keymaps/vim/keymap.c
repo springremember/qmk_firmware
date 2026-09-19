@@ -148,7 +148,6 @@ static bool     spc_holding     = false;
 /* ===== Normal mode Enter: short = right click, long = hold right ===== */
 #define ENT_HOLD_TIME 200
 static uint16_t ent_press_timer = 0;
-static bool     ent_holding     = false;
 
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
@@ -598,7 +597,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
-    // ---- Normal-mode Enter：短按=真实 Enter / 长按=鼠标右键（保持到松开；抬起仅当按下被接管时消费）----
+    // ---- Normal-mode Enter：短按=真实 Enter / 长按=单击一次鼠标右键（抬起时判定；抬起仅当按下被接管时消费）----
     if (keycode == KC_ENT) {
         if (record->event.pressed) {
             if (mouse_ctx) {
@@ -608,10 +607,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
         } else if (ent_ms_pressed) {
             ent_ms_pressed = false;
-            if (ent_holding) {
-                unregister_code(MS_BTN2);
-                ent_holding = false;
-            } else if (ent_press_timer) {
+            if (ent_press_timer && timer_elapsed(ent_press_timer) >= ENT_HOLD_TIME) {
+                tap_code(MS_BTN2); // 长按 = 单击一次右键
+            } else {
                 tap_code(KC_ENT); // 短按 = 真实 Enter
             }
             ent_press_timer = 0;
@@ -662,13 +660,6 @@ void matrix_scan_user(void) {
         get_mods() == 0) {
         register_code(MS_BTN1);
         spc_holding = true;
-    }
-
-    // Enter long press (Normal mode): hold the right button until release.
-    if (ent_press_timer && !ent_holding && timer_elapsed(ent_press_timer) >= ENT_HOLD_TIME && vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && !replace_active &&
-        get_mods() == 0) {
-        register_code(MS_BTN2);
-        ent_holding = true;
     }
 }
 
