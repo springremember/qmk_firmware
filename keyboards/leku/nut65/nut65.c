@@ -18,7 +18,8 @@ enum layers {
     _FL,
     _MBL,
     _MFL,
-    _DEFA, 
+    _DEFA,
+    _FN, // keymap adds a myfn layer at index 5 (see keymaps/vim/keymap.c)
 };
 
 enum hs_layer_choose {
@@ -765,7 +766,8 @@ bool hs_process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     switch (keycode) {
         case MO(_FL):
-        case MO(_MFL): {
+        case MO(_MFL):
+        case MO(_FN): {
             if (!record->event.pressed && rgbrec_is_started()) {
                 if (no_record_fg == true) {
                     no_record_fg = false;
@@ -792,7 +794,7 @@ bool hs_process_record_user(uint16_t keycode, keyrecord_t *record) {
         } break;
     }
 
-    if (rgbrec_is_started() && (!(keycode == RP_P0 || keycode == RP_P1 || keycode == RP_P2 || keycode == RP_END || keycode == RGB_MOD || keycode == MO(_FL) || keycode == MO(_MFL)))) {
+    if (rgbrec_is_started() && (!(keycode == RP_P0 || keycode == RP_P1 || keycode == RP_P2 || keycode == RP_END || keycode == RGB_MOD || keycode == MO(_FL) || keycode == MO(_MFL) || keycode == MO(_FN)))) {
 
         return false;
     }

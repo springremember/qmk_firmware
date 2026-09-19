@@ -614,6 +614,23 @@ static bool pr_mouse_emu(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
+// Fn + Right Shift + Esc -> bootloader (DFU). On _FN the Esc position
+// resolves to EE_CLR; this handler runs before the vendor EE_CLR handler
+// (hs_process_record) so it can be intercepted here. Restores the old
+// documented Fn+RShift+Esc boot path now that _FL/_DEFA are unreachable.
+// Mirrors the vendor QK_BOOT handler in nut65.c (eeconfig_disable +
+// bootloader_jump). Returns true when it consumed the event.
+static bool pr_boot_combo(uint16_t keycode, keyrecord_t *record, uint8_t mods) {
+    if (keycode == EE_CLR && IS_LAYER_ON(_FN) && (mods & MOD_BIT(KC_RSFT))) {
+        if (record->event.pressed) {
+            eeconfig_disable();
+            bootloader_jump();
+        }
+        return true;
+    }
+    return false;
+}
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Snapshot the volatile state once per event so every handler below reads
     // the same consistent values. None of the handlers mutate this state and
@@ -673,6 +690,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         if (record->event.pressed) pw_enter_sleep();
         return false;
     }
+
+    // ---- Fn + Right Shift + Esc: jump to bootloader ----
+    if (pr_boot_combo(keycode, record, mods)) return false;
 
     // ---- Right Shift combos ----
     if (pr_shift_combos(keycode, record, mods)) return false;
