@@ -4,10 +4,10 @@
 
 硬件：CIDOO QK61（VID `0x36B0` / PID `0x3035`，矩阵 6×16，RGB Matrix 64 灯，VIA，FS026）。
 
-引擎 `qmk-vim` 与「新 Fn 层」支撑库 `qmk-myfn` 均为独立仓库，通过 **git 子模块**引入：
+引擎 `qmk-vim` 为独立仓库，通过 **git 子模块**引入；「新 Fn 层」遵循 `qmk-myfn` **约定文档**（仅约定、无代码），在 `keymap.c` 内联实现：
 
-- `keyboards/qk61/keymaps/vim/qmk-vim/` → `git@github.com:springremember/qmk-vim.git`
-- `keyboards/qk61/keymaps/vim/qmk-myfn/` → `git@github.com:springremember/qmk-myfn.git`
+- `keyboards/qk61/keymaps/vim/qmk-vim/` → `git@github.com:springremember/qmk-vim.git`（子模块）
+- myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
 
 ## 一、键位与层
 
@@ -31,7 +31,8 @@ Base 层 Esc 由 `QK_GESC` 改为 **`KC_ESC`**（供 vim 拦截）。
 | :--- | :--- |
 | `-` / `=` | 音量减 / 增（`KC_VOLD` / `KC_VOLU`） |
 | `Q` / `W` / `E` / `R` | 蓝牙 1 / 2 / 3 / 2.4G（`MD_BLE1/2/3`、`MD_24G`） |
-| `Space` | **Fn+Space = 电量提示**（用数字键 LED 1–10 显示，由 `qmk-myfn` 拦截） |
+| `T` | 切有线：QK61 **有物理开关** → 按 myfn 约定**空跑**（吞键，不输出 `t`） |
+| `Space` | **Fn+Space = 电量提示**（用数字键 LED 1–10 显示；按 myfn 约定，QK61 在 `keymap.c` 内联实现） |
 | 其余 | 透明（`KC_TRNS`，即照常输出） |
 
 > **注意**：原厂 Fn 层（layer 2/3）不再有按键指向，因此 **F1–F12、`~`、媒体键、RGB 亮度/速度/色相、`QK_BAT`、`QK_WLO`（Win-Lock 开关）等原厂 Fn 功能不再提供入口**。这是刻意的精简。原厂 `_WIN_FN` 已恢复为厂商原样（`-`/`=` = `F11`/`F12`），仅作保留。
@@ -164,9 +165,9 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 
 - `keyboards/qk61/keymaps/vim/keymap.c` — 键位、vim 交互、鼠标、灯效
 - `keyboards/qk61/keymaps/vim/config.h` — qmk-vim 功能开关、`MYFN_LAYER`、`DYNAMIC_KEYMAP_LAYER_COUNT`
-- `keyboards/qk61/keymaps/vim/rules.mk` — 引入 qmk-vim / qmk-myfn 源文件
+- `keyboards/qk61/keymaps/vim/rules.mk` — 引入 qmk-vim 源文件
 - `keyboards/qk61/keymaps/vim/qmk-vim/` — **子模块**：vim 引擎
-- `keyboards/qk61/keymaps/vim/qmk-myfn/` — **子模块**：新 Fn 层支撑（Fn 标志维护、Fn+Space 电量）
+- 「新 Fn 层」myfn 约定见 `qmk-myfn` 仓库文档（本 keymap 内联实现，无子模块）
 - `keyboards/qk61/qk61.c` — 厂商代码；本方案改动：指示灯钩子转调 keymap、`KC_SPC`/`KC_LGUI`/`KC_RGUI` 转交 `process_record_user`
 
 ## 九、编译与刷写

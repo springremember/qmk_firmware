@@ -10,7 +10,6 @@
 #include "qmk-vim/src/process_func.h"
 #include "common/rdmctmzt_common.h"
 #include "common/user_battery.h"
-#include "qmk-myfn/src/myfn.h"
 
 // Vendor globals defined in qk61.c, used to yield the RGB indicator layer.
 extern bool Key_Fn_Status;
@@ -81,8 +80,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LSFT, KC_NO,    KC_NO,    RM_SATD,   RM_SATU,   KC_DEL,   KC_END,   KC_PGDN, RM_VALD,  RM_VALU,            KC_UP,              QK_BAT,
         KC_LCTL, KC_LALT,  KC_LGUI,                        RM_TOGG,                               KC_LEFT,  KC_DOWN,  KC_RGHT,  KC_NO
     ),
-    // 新 Fn 层（qmk-myfn）：仅音量 / 蓝牙·2.4G 切换；其余透明；
-    // Fn+Space 电量由 process_record_myfn() 拦截（Space 保持 KC_TRNS）。
+    // 新 Fn 层（myfn 约定，见 qmk-myfn 文档）：音量 / 蓝牙·2.4G 切换；其余透明；
+    // Fn+Space 电量、Fn+T 空跑（QK61 有物理开关）由 process_record_myfn() 处理。
     [_FN] = LAYOUT_60_ansi(
         _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, KC_VOLD, KC_VOLU, _______,
         _______, MD_BLE1, MD_BLE2, MD_BLE3, MD_24G,  _______, _______, _______, _______, _______, _______, _______, _______, _______,
@@ -179,19 +178,44 @@ static bool     reset_armed  = false;
 static bool     reset_fired  = false;
 
 static inline bool fn_layer_active(void) {
-    return myfn_active();
+    return layer_state_cmp(layer_state | default_layer_state, MYFN_LAYER);
 }
 
-/* ===== qmk-myfn 钩子 ===== */
-// 维护厂商 Fn 状态标志（Fn 指示灯 + 软睡眠 Fn+Enter 组合判定）。
-void myfn_fn_status(bool on) {
-    Key_Fn_Status = on;
+/* 维护厂商 Fn 状态标志（Fn 指示灯 + 闪灯让位）。 */
+layer_state_t layer_state_set_user(layer_state_t state) {
+    Key_Fn_Status = layer_state_cmp(state | default_layer_state, MYFN_LAYER);
+    return state;
 }
 
-// Fn+Space 电量显示：用厂商数字键 LED 1-10 指示。
-void myfn_battery(bool pressed) {
-    User_Key_Batt_Num_Show = pressed;
-    User_Key_Batt_Count    = 0;
+/* ===== myfn 约定（内联实现；约定文本见 qmk-myfn 仓库文档）=====
+ * 规则：前置满足→执行；前置不满足→吞键（空跑）；未声明→透传。
+ * QK61：Fn+Space=电量（有电池→执行）；Fn+T=切有线（QK61 有物理开关→空跑=吞）；
+ *       Q/W/E/R 由 qk61.c 处理；`-`/`=` 音量、Caps、Esc 由各自分支处理。 */
+static bool fn_batt_held = false;
+
+static bool process_record_myfn(uint16_t keycode, keyrecord_t *record) {
+    if (keycode == KC_SPC) { // 电量
+        if (record->event.pressed) {
+            if (!fn_layer_active()) {
+                return true; // 非 myfn 层 → 透传（普通 Space）
+            }
+            fn_batt_held           = true;
+            User_Key_Batt_Num_Show = true;
+            User_Key_Batt_Count    = 0;
+            return false;
+        }
+        if (fn_batt_held) { // 松开：即使已离开 myfn 层也要收尾
+            fn_batt_held           = false;
+            User_Key_Batt_Num_Show = false;
+            User_Key_Batt_Count    = 0;
+            return false;
+        }
+        return true;
+    }
+    if (fn_layer_active() && keycode == KC_T) { // 切有线：有物理开关 → 空跑（吞）
+        return false;
+    }
+    return true; // 其余键透传给其它分支
 }
 
 /* ===== 按键短暂亮灯 =====
@@ -453,7 +477,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Mouse context: Normal mode with vim on, not replace-typing, no modifiers.
     const bool    mouse_ctx = vim_on && vmode == NORMAL_MODE && !replace_active && mods == 0;
 
-    // ---- qmk-myfn：Fn + Space 电量（在 vim / 鼠标处理之前拦截） ----
+    // ---- myfn 约定：Fn+Space 电量 / Fn+T 空跑（在 vim / 鼠标处理之前拦截） ----
     if (!process_record_myfn(keycode, record)) {
         return false;
     }
