@@ -598,7 +598,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
-    // ---- Normal-mode Enter: 鼠标右键（短按单击 / 长按保持；抬起仅当按下被接管时消费）----
+    // ---- Normal-mode Enter：短按=真实 Enter / 长按=鼠标右键（保持到松开；抬起仅当按下被接管时消费）----
     if (keycode == KC_ENT) {
         if (record->event.pressed) {
             if (mouse_ctx) {
@@ -612,7 +612,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 unregister_code(MS_BTN2);
                 ent_holding = false;
             } else if (ent_press_timer) {
-                tap_code(MS_BTN2);
+                tap_code(KC_ENT); // 短按 = 真实 Enter
             }
             ent_press_timer = 0;
             return false;
