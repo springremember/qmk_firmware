@@ -16,6 +16,9 @@ extern bool Test_Led;
 // qmk-vim current keycode processor (swapped to drive the replace-mode handler)
 extern process_func_t process_func;
 
+// Vendor MCU reset (qk61 common/user_system.c), used by the Fn+Esc EEPROM reset.
+extern void mcu_reset(void);
+
 #ifdef VIM_DOT_REPEAT
 extern void add_repeat_keycode(uint16_t keycode);
 #endif
@@ -98,13 +101,22 @@ static bool     spc_holding     = false;
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
 
-/* ===== Menu key: tap = Right; long press = one right click =====
- * The right click only fires in the Normal mouse context. The key does not
- * participate in the directional mouse movement (that is the other three
- * direction keys on the bottom row). */
+/* ===== Menu key (MENU_TAP_RIGHT) =====
+ * Normal mouse context: pointer right (hold = mousekey acceleration).
+ * Other modes:           tap = Right arrow, long press = KC_APP (Menu key). */
 static uint16_t menu_timer   = 0;
 static bool     menu_pressed = false;
 static bool     menu_held    = false;
+
+/* ===== Fn + Esc held >= 3s = reset EEPROM (eeconfig_init) + reboot ===== */
+#define RESET_HOLD_MS 3000
+static uint16_t reset_timer  = 0;
+static bool     reset_armed  = false;
+static bool     reset_fired  = false;
+
+static inline bool fn_layer_active(void) {
+    return IS_LAYER_ON(_WIN_FN) || IS_LAYER_ON(_MAC_FN);
+}
 
 /* ===== 26 letters: key-triggered brief flash =====
  * LED index per keycode KC_A..KC_Z, derived from g_led_config.matrix_co and
@@ -330,18 +342,41 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         letter_flash[keycode - KC_A] = t ? t : 1;
     }
 
-    // ---- Menu key tap-hold: tap = Right, long = one right click ----
-    if (keycode == MENU_TAP_RIGHT) {
+    // ---- Fn + Esc (physical [0,0]) held >= 3s = EEPROM reset (see matrix_scan_user).
+    //      Both press and release are swallowed, so Fn+Esc emits nothing. ----
+    if (fn_layer_active() && record->event.key.row == 0 && record->event.key.col == 0) {
         if (record->event.pressed) {
-            menu_pressed = true;
-            menu_held    = false;
-            menu_timer   = timer_read();
+            if (!reset_armed) {
+                reset_armed = true;
+                reset_fired = false;
+                reset_timer = timer_read();
+            }
         } else {
-            menu_pressed = false;
-            if (menu_held) {
-                menu_held = false; // right click already fired in matrix_scan_user
+            reset_armed = false;
+        }
+        return false;
+    }
+
+    // ---- Menu key: Normal = pointer right; other modes = tap Right / hold Menu ----
+    if (keycode == MENU_TAP_RIGHT) {
+        if (mouse_ctx) {
+            if (record->event.pressed) {
+                register_code(MS_RGHT);
             } else {
-                tap_code(KC_RGHT);
+                unregister_code(MS_RGHT);
+            }
+        } else {
+            if (record->event.pressed) {
+                menu_pressed = true;
+                menu_held    = false;
+                menu_timer   = timer_read();
+            } else {
+                menu_pressed = false;
+                if (menu_held) {
+                    menu_held = false; // KC_APP already fired in matrix_scan_user
+                } else {
+                    tap_code(KC_RGHT);
+                }
             }
         }
         return false;
@@ -421,12 +456,21 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 void matrix_scan_user(void) {
-    // Menu long press: one right click, only in the Normal mouse context.
+    // Fn + Esc held >= 3s: full EEPROM reset (compiled keymap gets reloaded
+    // via eeconfig_init() -> eeconfig_init_via() -> dynamic_keymap_reset()),
+    // then reboot.
+    if (reset_armed && !reset_fired && timer_elapsed(reset_timer) >= RESET_HOLD_MS) {
+        reset_fired = true;
+        reset_armed = false;
+        clear_keyboard();
+        eeconfig_init();
+        mcu_reset();
+    }
+
+    // Menu long press (non-mouse context): Menu/application key.
     if (menu_pressed && !menu_held && timer_elapsed(menu_timer) >= TAPPING_TERM) {
         menu_held = true;
-        if (vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && !replace_active && get_mods() == 0) {
-            tap_code(MS_BTN2);
-        }
+        tap_code(KC_APP);
     }
 
     // Space long press (Normal mode): hold the left button (drag) until release.

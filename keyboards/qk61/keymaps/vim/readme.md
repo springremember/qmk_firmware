@@ -26,13 +26,14 @@ Win Fn 层（layer 2）的 `-` / `=` 改为 **`KC_VOLD` / `KC_VOLU`**（对齐 N
 | 右 Alt | `KC_RALT` | `MO(2)` | — | Fn 层 |
 | 原 Menu | `KC_APP` | `MT(MOD_RALT, KC_LEFT)` | `←`（Normal 下=鼠标左移） | 右 Alt |
 | 右 Ctrl | `KC_RCTL` | `MT(MOD_RCTL, KC_DOWN)` | `↓`（Normal 下=鼠标下移） | 右 Ctrl |
-| 原 Fn | `MO(2)` | `MENU_TAP_RIGHT` | `→` | 鼠标右键（仅 Normal，一次） |
+| 原 Fn | `MO(2)` | `MENU_TAP_RIGHT` | `→`（Normal 下=鼠标右移） | `Menu`（`KC_APP`）/ Normal 下=鼠标右移加速 |
 | 右 Shift | `KC_RSFT` | `MT(MOD_RSFT, KC_UP)` | `↑`（Normal 下=鼠标上移） | 右 Shift |
 
 > 物理右 Alt 位改为纯 Fn（`MO(2)`，不带方向/鼠标）；右 Alt 移到原 Menu 位，方向键与鼠标功能保留在原 Menu 位（Win：`MT(MOD_RALT, KC_LEFT)`；Mac：`MO(3)` 与 `MT(MOD_RGUI, KC_LEFT)`）。
 
 - 判定阈值 = QMK `TAPPING_TERM`（默认 **200ms**）。
 - `Fn` / 右 Ctrl / 右 Shift 使用 QMK 原生 `LT` / `MT`；Menu 键为自定义 tap-hold（`MENU_TAP_RIGHT`）。
+- **`Fn` + `Esc` 长按 3 秒 = 重置 EEPROM**（`eeconfig_init()`，键位及所有设置恢复编译默认）并重启；短按 `Fn`+`Esc` 不输出任何键。用于刷固件后让编译键位/VIA 设置强制生效。
 - 在 Normal 鼠标上下文（见第五节）下底排 ←/↓/↑ 三键不再触发 右 Alt / 右 Ctrl / 右 Shift，而是移动鼠标指针；Menu 键仍为短按 `→`、长按鼠标右键。
 
 ## 二、Vim 模式与开关
@@ -105,12 +106,11 @@ Normal 模式数字键作计数器（`VIM_NUMBERED_JUMPS`），可配合行操�
 
 | 按键 | 行为 |
 | :--- | :--- |
-| 底排方向键 ← / ↓ / ↑（原 Menu / 右 Ctrl / 右 Shift 的轻按位） | **按住移动鼠标指针**（左 / 下 / 上；QMK mousekey 连续移动并加速），松开停止 |
+| 底排方向键 ← / ↓ / ↑ / →（原 Menu / 右 Ctrl / 右 Shift / 原 Fn 位） | **按住移动鼠标指针**（左 / 下 / 上 / 右；QMK mousekey 连续移动并加速），松开停止 |
 | `Space` | 短按 = 鼠标左键单击；长按（≥200ms）= 按住左键拖动，松开释放 |
-| Menu 键（= → 位） | 短按 = `→` 方向键；长按（≥200ms）= **一次鼠标右键** |
 
-- 上述 ←/↓/↑ 三键在此上下文内不再输出方向键、也不再触发各自的 右 Alt / 右 Ctrl / 右 Shift 层/修饰；离开该上下文（Insert / Visual / 替换模式，或按住修饰键）后恢复原生 tap-hold 行为。
-- Menu 键不参与鼠标移动：短按始终发 `→`；长按的右键仅在鼠标上下文内触发，其它上下文长按无动作。
+- 上述四键在此上下文内不再输出方向键、也不再触发各自的 右 Alt / 右 Ctrl / 右 Shift 层/修饰；离开该上下文（Insert / Visual / 替换模式，或按住修饰键）后恢复原生 tap-hold 行为。
+- Menu 键（→ 位）在非鼠标上下文：短按 = `→`；长按（≥200ms）= `Menu`（`KC_APP`，即 menu 自身功能）。
 - 鼠标报告通过 QMK `mousekey`（已启用）产生，由 qk61 的 `es_send_mouse` 按当前模式（USB / BLE / 2.4G）发送。
 - 与 NUT65 不同，QK61 的无线鼠标发送路径无需额外的连接门控（厂商栈无 NUT65 的队列洪泛问题）。
 
