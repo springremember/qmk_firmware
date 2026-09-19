@@ -30,6 +30,22 @@ Enter the bootloader in 2 ways:
 
 Build the `default` keymap and import `CIDOO QK61 VIA.JSON` in <https://usevia.app/> if VIA configuration is needed. In VIA settings, enable **Show Design tab**, then load the draft definition in the Design tab.
 
+## Sleep / power management
+
+The vendor deep-sleep/wake path (`common/user_system.c`) is known to hang this MCU after the
+cable is unplugged, so it is disabled with `DISABLE_CUSTOM_SLEEP` in `config.h`. A keyboard-level
+state machine in `qk61.c` ("C1") owns wireless sleep instead:
+
+* After 5 minutes of inactivity in a wireless mode it cuts the RF module power (`ES_SDB_POWER_IO`
+  low) and turns the LEDs off.
+* Any key press, or inserting the USB cable, restores SDB via `Init_Gpio_Infomation()`,
+  re-handshakes the SPI link and re-sends the current mode so the module reconnects.
+* Inserting the cable also switches to USB and fully re-enumerates the device
+  (`es_restart_usb_driver()`).
+
+There is no `Fn+Enter` manual sleep. All waits are bounded; a failed wake falls back to
+`Board_Wakeup_Init()` and finally `mcu_reset()`.
+
 ## Notes
 
 * VIA lighting support is partial. RGB Matrix firmware support exists, but the VIA draft definition still contains legacy logo-lighting controls, and the small indicator/light to the left of Esc is not controllable from VIA.
