@@ -33,7 +33,10 @@ Win Fn 层（layer 2）的 `-` / `=` 改为 **`KC_VOLD` / `KC_VOLU`**（对齐 N
 
 - 判定阈值 = QMK `TAPPING_TERM`（默认 **200ms**）。
 - `Fn` / 右 Ctrl / 右 Shift 使用 QMK 原生 `LT` / `MT`；Menu 键为自定义 tap-hold（`MENU_TAP_RIGHT`）。
-- **`Fn` + `Esc` 长按 3 秒 = 重置 EEPROM**（`eeconfig_init()`，键位及所有设置恢复编译默认）并重启；短按 `Fn`+`Esc` 不输出任何键。用于刷固件后让编译键位/VIA 设置强制生效。
+- **刷固件后自动强制刷新键位**：每次刷入**新编译**的固件后首次开机，会用完整 `QMK_BUILDDATE`（含时分秒）哈希与 EEPROM 中记录的构建标识比较，不同则 `dynamic_keymap_reset()` 把编译键位重灌进 VIA 动态键位。
+  - 原因：QK61 运行时只读 EEPROM 里的 VIA 动态键位，固件 `keymaps` 被遮蔽；而 VIA 自带的 magic 只用日期的年/月/日，**同一天多次编译不会触发重置**。
+  - 同一固件重启不重复刷新（不伤 flash）。
+- **`Fn` + `Esc` 长按 3 秒 = 重置 EEPROM**（`eeconfig_init()`，键位及所有设置恢复编译默认）并重启；短按 `Fn`+`Esc` 不输出任何键。作为手动兜底。
 - 在 Normal 鼠标上下文（见第五节）下底排 ←/↓/↑ 三键不再触发 右 Alt / 右 Ctrl / 右 Shift，而是移动鼠标指针；Menu 键仍为短按 `→`、长按鼠标右键。
 
 ## 二、Vim 模式与开关

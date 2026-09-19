@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include QMK_KEYBOARD_H
+#include "version.h"          // QMK_BUILDDATE (full build timestamp)
+#include "dynamic_keymap.h"   // dynamic_keymap_reset()
 #include "qmk-vim/src/vim.h"
 #include "qmk-vim/src/modes.h"
 #include "qmk-vim/src/process_func.h"
@@ -67,8 +69,30 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 // clang-format on
 
+/* ===== Force the compiled keymap into the VIA dynamic keymap once per flashed
+ * firmware build.  VIA's own EEPROM magic only uses the year/month/day part of
+ * QMK_BUILDDATE, so several builds on the same day do NOT reset the dynamic
+ * keymap (which shadows keymaps/vim).  Hashing the full timestamp (including
+ * time) makes every new build refresh the keymap on its first boot. ===== */
+static uint32_t fw_build_id(void) {
+    uint32_t h = 2166136261u;
+    for (const char *s = QMK_BUILDDATE; *s; s++) {
+        h ^= (uint8_t)*s;
+        h *= 16777619u;
+    }
+    return h;
+}
+
 /* ===== Vim is always on: start in typing (Insert) mode ===== */
 void keyboard_post_init_user(void) {
+    uint32_t stored_id = 0;
+    eeconfig_read_user_datablock(&stored_id, 0, sizeof(stored_id));
+    if (stored_id != fw_build_id()) {
+        dynamic_keymap_reset(); // write the compiled keymap into EEPROM
+        uint32_t id = fw_build_id();
+        eeconfig_update_user_datablock(&id, 0, sizeof(id));
+    }
+
     enable_vim_mode();
     insert_mode();
 
