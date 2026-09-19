@@ -187,3 +187,11 @@ make qk61:vim:flash
 ## 十、已知局限
 
 与 NUT65 Vim 一致：`e` 近似 `w`；`^`、`W`/`B`/`E`、`f`/`t`/`;`/`,`、`%`、mark、正则搜索、文本对象/块选/寄存器/宏、`~`、缩进、`zz` 等无法通过键码实现；`R`/`r` 在中文输入法激活时需先切英文；`.` 重复仅覆盖 vim 引擎录制范围。`dd` 的 smart-home 缩进已用双 `Home` 抵消，但末行/无尾换行仍为近似。
+
+## 十一、参考项目地址
+
+- QMK：https://github.com/qmk/qmk_firmware
+- 社区 QMK-VIM（上游引擎）：https://github.com/andrewjrae/qmk-vim
+- 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim
+- 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-myfn
+- QK61 官方移植参考：https://github.com/springremember/qmk_firmware_QK61
