@@ -5,7 +5,13 @@
 #include "rgb_record/rgb_record.h"
 #include "qmk-vim/src/vim.h"
 #include "qmk-vim/src/modes.h"
+#include "qmk-vim/src/actions.h"
 #include "qmk-vim/src/process_func.h"
+
+// Alt+Tab passthrough state: remembers that the current Tab press was passed
+// straight to the host with Alt held, so its release is forwarded too (and is
+// never swallowed by the engine, which would leave Tab stuck / auto-repeating).
+static bool alt_tab_held = false;
 
 // Vendor housekeeping loop, renamed in nut65.c to make room for the keymap hook
 extern void hs_housekeeping_task_user(void);
@@ -703,9 +709,24 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (mouse_ctx && pr_mouse_emu(keycode, record)) return false;
 
     // ---- Alt+Tab: pass Tab through with the held Alt so the task switcher
-    // stays open; vim normal mode would tap LALT(Tab), releasing Alt. ----
-    if (keycode == KC_TAB && (mods & MOD_MASK_ALT)) {
-        return true;
+    // stays open; vim normal mode would tap LALT(Tab), releasing Alt.
+    // The passthrough is REMEMBERED so the matching Tab release is forwarded
+    // too, even if Alt was released first - otherwise the engine would consume
+    // the release and leave Tab stuck / auto-repeating. ----
+    if (keycode == KC_TAB) {
+        if (alt_tab_held) {
+            alt_tab_held = false; // Tab release of a passed-through Alt+Tab
+            return true;
+        }
+        if (mods & MOD_MASK_ALT) {
+            alt_tab_held = true;
+            // Abort a half-typed operator / g prefix so the passed-through
+            // Alt+Tab cannot be followed by a stale motion.
+            if (vim_pending_action() || vim_pending_g()) {
+                normal_mode();
+            }
+            return true;
+        }
     }
 
     if (!process_vim_mode(keycode, record)) {
