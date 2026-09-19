@@ -614,6 +614,12 @@ static bool pr_mouse_emu(uint16_t keycode, keyrecord_t *record) {
 static bool pr_boot_combo(uint16_t keycode, keyrecord_t *record, uint8_t mods) {
     if (keycode == EE_CLR && IS_LAYER_ON(_FN) && (mods & MOD_BIT(KC_RSFT))) {
         if (record->event.pressed) {
+            // Release every held key/modifier (esp. the Right Shift used by
+            // this combo) and send a clean report before resetting. Jumping
+            // with the modifier still asserted leaves the host stuck with
+            // Shift held (numbers -> symbols, dd -> Ctrl+Shift+X).
+            clear_keyboard();
+            wait_ms(50); // give USB a moment to flush the report
             eeconfig_disable();
             bootloader_jump();
         }
