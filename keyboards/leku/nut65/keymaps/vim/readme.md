@@ -96,18 +96,18 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 >
 > **无线链路门控**：仅当 USB 有线或无线模块已连接（`MD_STATE_CONNECTED`）时才会产生鼠标报告；蓝牙/2.4G 瞬断的瞬间，方向键/空格/End 自动回落为 vim 原生行为，键盘保持可用，连接恢复后鼠标功能自动恢复。此门控用于防止厂商无线栈在模块未连接时发送鼠标报告导致的 smsg 队列洪泛死机（症状：所有按键失效、必须拨无线物理开关）。
 
-## 三、F 区与 grave：右 Shift 组合键
+## 三、grave：Shift + Esc 组合键
 
-按住**右 `Shift`** 再按以下键（替代已删除的 _GO 层；其它任何按键组合下右 `Shift` 仍是普通 Shift）：
+按住 `Shift` 再按 `Esc`（其它任何按键组合下 `Shift` 仍是普通 Shift）：
 
 | 组合 | 输出 |
 | :--- | :--- |
 | 左 `Shift` + `Esc`（可同时按右 `Shift`） | `~` |
 | 右 `Shift` + `Esc`（仅右 `Shift`） | `` ` `` |
-| 右 `Shift` + `1` `2` `…` `0` `-` `=` | F1 F2 … F10 F11 F12 |
 
-> Insert 模式下数字键不再长按出 F 区（已取消），普通数字输入即可；**右 `Ctrl` + 数字**在 Insert 模式映射为 F1~F10，**左 `Ctrl` + 数字**为普通 Ctrl+数字（不触发 F 区）。
-> 说明：`Fn` + 数字（新 `_FN` 层）为 `F1`~`F10`（myfn 约定，非厂商原厂行为）；`Fn` + `-`/`=` 为音量减/增。
+> 原先的「右 `Shift` + `1`..`0`/`-`/`=` = F1..F12」**已移除**（F 区改由 `_FN` 层提供）。
+> `Fn` + `1`..`0` = `F1`..`F10`；`Fn` + `-`/`=` = `F11`/`F12`；`Fn` + `[`/`]` = 音量减/增（myfn 约定）。
+> Insert 模式下数字键普通输入即可；**右 `Ctrl` + 数字**在 Insert 模式映射为 F1~F10，**左 `Ctrl` + 数字**为普通 Ctrl+数字。
 >
 > 底排已将**右 `Alt` 与 `Fn` 位置对调**（Mac 层为 右 `Cmd` 与 `Fn` 对调）：Win 层为 `… Space, Fn, 右Alt, ←, ↓, →`；Mac 层为 `… Space, Fn, 右Cmd, ←, ↓, →`。
 
@@ -132,9 +132,9 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 ## 五、与厂商固件的差异
 
 键盘层定义（keymap）中：
-- **新增 `_FN`（myfn 新 Fn 层）**：底排 `Fn` 键由 `MO(_FL)`/`MO(_MFL)` 改为 **`MO(_FN)`**。`_FN` 内容遵循 `qmk-myfn` 约定：`-`/`=`=音量、`Q/W/E`=蓝牙 1/2/3、`R`=2.4G、`T`=有线（`KC_USB`）、`Space`=电量（`HS_BATQ`）、`Esc`=初始化（`EE_CLR`）、`1..0`=F1..F10；其余透传。
+- **新增 `_FN`（myfn 新 Fn 层）**：底排 `Fn` 键由 `MO(_FL)`/`MO(_MFL)` 改为 **`MO(_FN)`**。`_FN` 内容遵循 `qmk-myfn` 约定：`1..0`=F1..F10、`-`/`=`=F11/F12、`[`/`]`=音量减/增、`Q/W/E`=蓝牙 1/2/3、`R`=2.4G、`T`=有线（`KC_USB`）、`Space`=电量（`HS_BATQ`）、`Esc`=初始化（`EE_CLR`）；其余透传。
 - `_FL` / `_MFL`（原厂 Fn 层）**原样保留、仅无进入途径**；`_DEFA` 亦然（其 `QK_BOOT` 改由 `_FN` 上的 `Fn`+右`Shift`+`Esc` 组合触发，见第六节）。
-- `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（End；Normal 模式下=鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave/F 区）见上文
+- `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（End；Normal 模式下=鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave）见上文
 - `_BL` / `_MBL` 底排：**右 `Alt` 与 `Fn` 位置对调**（Mac 层为 右 `Cmd` 与 `Fn` 对调）——Win：`… Space, Fn, 右Alt, ←, ↓, →`；Mac：`… Space, Fn, 右Cmd, ←, ↓, →`
 
 `Fn+Caps` 开关 Vim、`Fn+Esc` 初始化等由 keymap 在 `_FN` 激活时处理；Vim 功能仍为键码拦截实现。
@@ -162,7 +162,7 @@ make leku/nut65:vim:flash
 产物：`leku_nut65_vim.bin`（复制到项目 output/ 目录留档）。
 
 进入 bootloader 方式（任选其一）：
-- 按住 `Fn` + `Right Shift` + `Esc`（本 vim keymap 已实现：`_FN` 上 `Esc` 解析为 `EE_CLR`，keymap 拦截为 `eeconfig_disable()`+`bootloader_jump()`）
+- 按住 `Fn` + `Right Shift` + `Esc`（**厂商原厂组合键**，按 myfn 最高优先级约束保留；本 vim keymap 已实现：`_FN` 上 `Esc` 解析为 `EE_CLR`，keymap 拦截为 `eeconfig_disable()`+`bootloader_jump()`）
 - 按住 `Esc` 插入 USB 线（同时擦除持久化设置）
 - 按住底部 PCB 的 Reset 键插入 USB 线
 
@@ -197,13 +197,13 @@ make leku/nut65:vim:flash
 **目标**：产出一个 nut65 固件，实现 vim 绝大多数功能。
 
 **约束**
-1. 厂商定义的 `_FL`（win FN 层）已经用户许可按需修改（如 `-`/`=` 改音量）。
+1. 音量 / F 区等按 **myfn 约定**放在新增的 `_FN` 层（`Fn+1..0`=F1..F10、`Fn+-`/`Fn+=`=F11/F12、`Fn+[`/`Fn+]`=音量减/增）；厂商 `_FL`/`_MFL` 原样保留、无进入途径。原厂 `Fn`+右`Shift`+`Esc` 刷机组合键按 myfn 最高优先级约束保留。
 2. 键位改动以 `_BL`（win Base 层）为准（2026-09-17 最新）：`Insert`(row0 col14)→`Delete`；`Delete` 位(row1 col14)→`KC_WFWD`；PageUp 位(row2 col14)→`KC_WBAK`；PageDown 位(row3 col14)→`KC_END`。（历史曾为 Alt+F4 / 真 PageUp/PageDown，均已被用户否决）
 3. 目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
 ## 十、实现细节
 
-- 采用 qmk-vim 引擎（全局状态机），所有 vim 功能为键码拦截实现；额外新增 `_FN` 层承载 myfn 约定键（音量/蓝牙/2.4G/有线/电量/F1-F10/初始化），原厂 `_FL/_MFL/_DEFA` 保留但无进入途径。保留 qmk-vim 原生 let-through（F 键/方向键/Ctrl/Alt 组合按默认透传）。
+- 采用 qmk-vim 引擎（全局状态机），所有 vim 功能为键码拦截实现；额外新增 `_FN` 层承载 myfn 约定键（F1-F12/音量/蓝牙/2.4G/有线/电量/初始化），原厂 `_FL/_MFL/_DEFA` 保留但无进入途径。保留 qmk-vim 原生 let-through（F 键/方向键/Ctrl/Alt 组合按默认透传）。
 - 仅对 `keyboards/leku/nut65/nut65.c` 做 4 处最小改动：
   1. `process_record_user` 重命名 `hs_process_record_user`（RGB 录制逻辑原样保留）
   2. `housekeeping_task_user` 重命名 `hs_housekeeping_task_user`（充电/矩阵循环原样保留）

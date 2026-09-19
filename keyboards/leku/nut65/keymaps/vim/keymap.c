@@ -90,9 +90,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
         ),
 
-    [_FN] = LAYOUT(  /* myfn 新 Fn 层（约定：音量/蓝牙/2.4G/有线/电量/F1-F10/初始化） */
-        EE_CLR,   KC_F1,      KC_F2,      KC_F3,    KC_F4,    KC_F5,    KC_F6,    KC_F7,    KC_F8,    KC_F9,    KC_F10,     KC_VOLD,  KC_VOLU,  _______,   _______,
-        _______,  KC_BT1,     KC_BT2,     KC_BT3,   KC_2G4,   KC_USB,   _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,   _______,
+    [_FN] = LAYOUT(  /* myfn 新 Fn 层（约定：F1-F12/音量/蓝牙/2.4G/有线/电量/初始化） */
+        EE_CLR,   KC_F1,      KC_F2,      KC_F3,    KC_F4,    KC_F5,    KC_F6,    KC_F7,    KC_F8,    KC_F9,    KC_F10,     KC_F11,   KC_F12,   _______,   _______,
+        _______,  KC_BT1,     KC_BT2,     KC_BT3,   KC_2G4,   KC_USB,   _______,  _______,  _______,  _______,  _______,    KC_VOLD,  KC_VOLU,  _______,   _______,
         _______,  _______,    _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,    _______,            _______,   _______,
         _______,              _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,   _______,
         _______,  _______,    _______,                        HS_BATQ,                                          _______,    _______,  _______,  _______,   _______,
@@ -406,18 +406,20 @@ static void pr_power_mods(uint16_t keycode, keyrecord_t *record) {
     }
 }
 
-// Right Shift combos (replaces the old _GO layer): Right Shift + Esc = grave
-// (add left Shift for ~), Right Shift + 1..0/-/= = F1..F12. Any other key
-// keeps normal right-shift behaviour.
+// Shift + Esc combos: Left Shift + Esc = ~ (Right Shift may also be held),
+// Right Shift + Esc = grave. Any other key keeps normal shift behaviour.
+// (The old Right Shift + 1..0/-/= = F1..F12 mapping was removed now that the
+// myfn Fn layer provides F1..F12.)
 // NOTE: get_mods() is the 8-bit HID mod byte, while the MOD_R*/MOD_L*
 // constants are QMK's 5-bit packed encoding (MOD_RSFT=0x12 would match
 // Left-Shift 0x02 and Right-Ctrl 0x10 instead!). Always mask with the
 // 8-bit MOD_BIT_* constants here.
 static bool pr_shift_combos(uint16_t keycode, keyrecord_t *record, uint8_t mods) {
-    if ((keycode == KC_ESC) && (mods & MOD_BIT_LSHIFT) &&
+    if (keycode != KC_ESC) return false;
+
+    if ((mods & MOD_BIT_LSHIFT) &&
         !(mods & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
-        // Left Shift + Esc = ~ (Right Shift may also be held); Right-Shift-only
-        // + Esc falls through to the combo block below and sends grave.
+        // Left Shift + Esc = ~ (Right Shift may also be held).
         // All other modifiers still let Esc through.
         if (record->event.pressed) {
             uint8_t saved_mods = get_mods();
@@ -427,23 +429,12 @@ static bool pr_shift_combos(uint16_t keycode, keyrecord_t *record, uint8_t mods)
         }
         return true;
     }
-    if ((mods & MOD_BIT_RSHIFT) &&
-        (keycode == KC_ESC || (keycode >= KC_1 && keycode <= KC_0) || keycode == KC_MINS || keycode == KC_EQL)) {
+    if (mods & MOD_BIT_RSHIFT) {
+        // Right Shift + Esc = grave.
         if (record->event.pressed) {
-            uint16_t repl;
-            if (keycode == KC_ESC) {
-                repl = KC_GRV; // Left+Right Shift = ~ is handled above
-            } else if (keycode == KC_MINS) {
-                repl = KC_F11;
-            } else if (keycode == KC_EQL) {
-                repl = KC_F12;
-            } else {
-                uint8_t num = (keycode == KC_0) ? 10 : (keycode - KC_1 + 1);
-                repl        = KC_F1 + num - 1;
-            }
             uint8_t saved_mods = get_mods();
-            clear_mods(); // the held Right Shift must not shift the F-keys
-            tap_code16(repl);
+            clear_mods();
+            tap_code16(KC_GRV);
             set_mods(saved_mods);
         }
         return true;
