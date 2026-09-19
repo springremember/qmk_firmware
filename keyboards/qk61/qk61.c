@@ -824,6 +824,6 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                 }
             }
         } return true;
-        default:    return true; // Process all other keycodes normally
+        default:    return process_record_user(keycode, record); // Process all other keycodes normally
     }
 }
