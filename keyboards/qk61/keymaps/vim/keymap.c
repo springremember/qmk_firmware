@@ -10,10 +10,12 @@
 #include "qmk-vim/src/process_func.h"
 #include "common/rdmctmzt_common.h"
 #include "common/user_battery.h"
+#include "qmk-myfn/src/myfn.h"
 
 // Vendor globals defined in qk61.c, used to yield the RGB indicator layer.
 extern bool Key_Fn_Status;
 extern bool User_Key_Batt_Num_Show;
+extern uint8_t User_Key_Batt_Count;
 extern bool Test_Led;
 
 // qmk-vim current keycode processor (swapped to drive the replace-mode handler)
@@ -31,6 +33,7 @@ enum layers {
     _MAC_BASE,
     _WIN_FN,
     _MAC_FN,
+    _FN = MYFN_LAYER,
 };
 
 enum custom_keycodes {
@@ -54,17 +57,17 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TAB,  KC_Q,     KC_W,     KC_E,      KC_R,      KC_T,     KC_Y,     KC_U,    KC_I,     KC_O,     KC_P,     KC_LBRC,  KC_RBRC,  KC_BSLS,
         KC_CAPS, KC_A,     KC_S,     KC_D,      KC_F,      KC_G,     KC_H,     KC_J,    KC_K,     KC_L,     KC_SCLN,  KC_QUOT,            KC_ENT,
         KC_LSFT, KC_Z,     KC_X,     KC_C,      KC_V,      KC_B,     KC_N,     KC_M,    KC_COMM,  KC_DOT,             KC_SLSH,            MT(MOD_RSFT, KC_UP),
-        KC_LCTL, KC_LGUI,  KC_LALT,                        KC_SPC,                                MO(2),    MT(MOD_RALT, KC_LEFT), MT(MOD_RCTL, KC_DOWN), MENU_TAP_RIGHT
+        KC_LCTL, KC_LGUI,  KC_LALT,                        KC_SPC,                                MO(4),    MT(MOD_RALT, KC_LEFT), MT(MOD_RCTL, KC_DOWN), MENU_TAP_RIGHT
     ),
     [_MAC_BASE] = LAYOUT_60_ansi(
         KC_ESC,  KC_1,     KC_2,     KC_3,      KC_4,      KC_5,     KC_6,     KC_7,    KC_8,     KC_9,     KC_0,     KC_MINS,  KC_EQL,   KC_BSPC,
         KC_TAB,  KC_Q,     KC_W,     KC_E,      KC_R,      KC_T,     KC_Y,     KC_U,    KC_I,     KC_O,     KC_P,     KC_LBRC,  KC_RBRC,  KC_BSLS,
         KC_CAPS, KC_A,     KC_S,     KC_D,      KC_F,      KC_G,     KC_H,     KC_J,    KC_K,     KC_L,     KC_SCLN,  KC_QUOT,            KC_ENT,
         KC_LSFT, KC_Z,     KC_X,     KC_C,      KC_V,      KC_B,     KC_N,     KC_M,    KC_COMM,  KC_DOT,             KC_SLSH,            MT(MOD_RSFT, KC_UP),
-        KC_LCTL, KC_LALT,  KC_LGUI,                        KC_SPC,                                MO(3),    MT(MOD_RGUI, KC_LEFT), MT(MOD_RCTL, KC_DOWN), MENU_TAP_RIGHT
+        KC_LCTL, KC_LALT,  KC_LGUI,                        KC_SPC,                                MO(4),    MT(MOD_RGUI, KC_LEFT), MT(MOD_RCTL, KC_DOWN), MENU_TAP_RIGHT
     ),
     [_WIN_FN] = LAYOUT_60_ansi(
-        KC_GRV,  KC_F1,    KC_F2,    KC_F3,     KC_F4,     KC_F5,    KC_F6,    KC_F7,   KC_F8,    KC_F9,    KC_F10,   KC_VOLD,  KC_VOLU,  KC_BSPC,
+        KC_GRV,  KC_F1,    KC_F2,    KC_F3,     KC_F4,     KC_F5,    KC_F6,    KC_F7,   KC_F8,    KC_F9,    KC_F10,   KC_F11,   KC_F12,   KC_BSPC,
         KC_TAB,  MD_BLE1,  MD_BLE2,  MD_BLE3,   MD_24G,    KC_PSCR,  KC_SCRL,  KC_PAUS, KC_I,     KC_O,     KC_P,     UG_SPDD,  UG_SPDU,  UG_NEXT,
         KC_CAPS, TO(0),    TO(1),    KC_D,      KC_F,      KC_INS,   KC_HOME,  KC_PGUP, KC_K,     KC_L,     UG_HUED,  UG_HUEU,            KC_ENT,
         KC_LSFT, RM_NEXT,  KC_NO,    RM_SATD,   RM_SATU,   KC_DEL,   KC_END,   KC_PGDN, RM_VALD,  RM_VALU,            KC_UP,              QK_BAT,
@@ -76,6 +79,15 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_CAPS, TO(0),    TO(1),    KC_D,      KC_F,      KC_INS,   KC_HOME,  KC_PGUP, KC_K,     KC_PGUP,  UG_HUED,  UG_HUEU,            KC_ENT,
         KC_LSFT, KC_NO,    KC_NO,    RM_SATD,   RM_SATU,   KC_DEL,   KC_END,   KC_PGDN, RM_VALD,  RM_VALU,            KC_UP,              QK_BAT,
         KC_LCTL, KC_LALT,  KC_LGUI,                        RM_TOGG,                               KC_LEFT,  KC_DOWN,  KC_RGHT,  KC_NO
+    ),
+    // 新 Fn 层（qmk-myfn）：仅音量 / 蓝牙·2.4G 切换；其余透明；
+    // Fn+Space 电量由 process_record_myfn() 拦截（Space 保持 KC_TRNS）。
+    [_FN] = LAYOUT_60_ansi(
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, KC_VOLD, KC_VOLU, _______,
+        _______, MD_BLE1, MD_BLE2, MD_BLE3, MD_24G,  _______, _______, _______, _______, _______, _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______,
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______,          _______,
+        _______, _______, _______,                     _______,                              _______, _______, _______,          _______
     )
 };
 // clang-format on
@@ -133,6 +145,11 @@ static bool     caps_was_insert  = false;
 static uint16_t spc_press_timer = 0;
 static bool     spc_holding     = false;
 
+/* ===== Normal mode Enter: short = right click, long = hold right ===== */
+#define ENT_HOLD_TIME 200
+static uint16_t ent_press_timer = 0;
+static bool     ent_holding     = false;
+
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
 
@@ -142,6 +159,10 @@ static bool replace_active = false;
 static uint16_t menu_timer   = 0;
 static bool     menu_pressed = false;
 static bool     menu_held    = false;
+static bool     menu_ms_held = false; // 本次按下已 register MS_RGHT
+
+/* ===== 已注册的鼠标方向键（切上下文后仍能在松开时反注册，防卡指针）===== */
+static bool ms_move_held[3] = {false, false, false}; // 0=left 1=down 2=up
 
 /* ===== Fn + Esc held >= 3s = reset EEPROM (eeconfig_init) + reboot ===== */
 #define RESET_HOLD_MS 3000
@@ -150,16 +171,32 @@ static bool     reset_armed  = false;
 static bool     reset_fired  = false;
 
 static inline bool fn_layer_active(void) {
-    return IS_LAYER_ON(_WIN_FN) || IS_LAYER_ON(_MAC_FN);
+    return myfn_active();
 }
 
-/* ===== 26 letters: key-triggered brief flash =====
- * LED index per keycode KC_A..KC_Z, derived from g_led_config.matrix_co and
- * LAYOUT_60_ansi. 0 = inactive. */
-#define LETTER_FLASH_MS 200
-static const uint8_t letter_led[26] = {
-    29, 46, 44, 31, 17, 32, 33, 34, 22, 35, 36, 37, 48, 47, 23, 24, 15, 18, 30, 19, 21, 45, 16, 43, 20, 42};
-static uint16_t letter_flash[26] = {0};
+/* ===== qmk-myfn 钩子 ===== */
+// 维护厂商 Fn 状态标志（Fn 指示灯 + 软睡眠 Fn+Enter 组合判定）。
+void myfn_fn_status(bool on) {
+    Key_Fn_Status = on;
+}
+
+// Fn+Space 电量显示：用厂商数字键 LED 1-10 指示。
+void myfn_battery(bool pressed) {
+    User_Key_Batt_Num_Show = pressed;
+    User_Key_Batt_Count    = 0;
+}
+
+/* ===== 按键短暂亮灯 =====
+ * LED 列表：26 字母 + Backspace/Tab/Enter/Shift/Ctrl/Win/Alt/Space/Menu。
+ * 按物理矩阵位（g_led_config.matrix_co）触发，兼容 MT/MO 包裹键。 */
+#define FLASH_MS 200
+static const uint8_t flash_led[] = {
+    // 26 字母（A-Z 对应灯位）
+    29, 46, 44, 31, 17, 32, 33, 34, 22, 35, 36, 37, 48, 47, 23, 24, 15, 18, 30, 19, 21, 45, 16, 43, 20, 42,
+    // Bksp13 Tab14 Enter40 LShift41 RShift52 LCtrl53 LGUI54 LAlt55 Space56 RAlt/RGUI58 RCtrl59 Menu60
+    13, 14, 40, 41, 52, 53, 54, 55, 56, 58, 59, 60};
+#define FLASH_LED_COUNT (sizeof(flash_led) / sizeof(flash_led[0]))
+static uint16_t flash_time[FLASH_LED_COUNT] = {0};
 
 static bool process_replace_mode(uint16_t keycode, const keyrecord_t *record) {
     if (record->event.pressed) {
@@ -200,6 +237,24 @@ void normal_mode_user(void) {
 #endif
 }
 
+// 进入 Visual / Visual-Line 同样清除旧计数（真 vim 会丢弃它）。
+#ifdef VIM_NUMBERED_JUMPS
+void visual_mode_user(void) {
+    extern int16_t motion_counter;
+    motion_counter = 0;
+}
+
+void visual_line_mode_user(void) {
+    extern int16_t motion_counter;
+    motion_counter = 0;
+}
+#endif
+
+// 通过 vim 开关离开 Replace（进入 Insert）时不能残留 replace_active。
+void insert_mode_user(void) {
+    replace_active = false;
+}
+
 // Normal mode bindings
 bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
     if (record->event.pressed) {
@@ -230,9 +285,6 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
                 return false;
             case KC_ENT:
                 tap_code(KC_ENT); // real Enter in Normal mode
-                return false;
-            case KC_TAB:
-                tap_code(KC_TAB); // real Tab passes through in Normal mode
                 return false;
             case LSFT(KC_J):
                 tap_code(KC_END); // join next line onto this one
@@ -304,6 +356,7 @@ static bool pr_esc(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t v
 
     if (record->event.pressed) {
         if (vmode == VISUAL_MODE || vmode == VISUAL_LINE_MODE) {
+            normal_mode(); // 真正退出 Visual / Visual-Line（否则会被永久困住）
             esc_swallow_release = true;
         } else if (replace_active) {
             normal_mode();
@@ -371,80 +424,102 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Mouse context: Normal mode with vim on, not replace-typing, no modifiers.
     const bool    mouse_ctx = vim_on && vmode == NORMAL_MODE && !replace_active && mods == 0;
 
-    // ---- 26 letters: record a brief flash on any press ----
-    if (record->event.pressed && keycode >= KC_A && keycode <= KC_Z) {
-        uint16_t t = timer_read();
-        letter_flash[keycode - KC_A] = t ? t : 1;
-    }
-
-    // ---- Fn + Esc (physical [0,0]) held >= 3s = EEPROM reset (see matrix_scan_user).
-    //      Both press and release are swallowed, so Fn+Esc emits nothing. ----
-    if (fn_layer_active() && record->event.key.row == 0 && record->event.key.col == 0) {
-        if (record->event.pressed) {
-            if (!reset_armed) {
-                reset_armed = true;
-                reset_fired = false;
-                reset_timer = timer_read();
-            }
-        } else {
-            reset_armed = false;
-        }
+    // ---- qmk-myfn：Fn + Space 电量（在 vim / 鼠标处理之前拦截） ----
+    if (!process_record_myfn(keycode, record)) {
         return false;
     }
 
-    // ---- Menu key: Normal = pointer right; other modes = tap Right / hold Menu ----
-    if (keycode == MENU_TAP_RIGHT) {
-        if (mouse_ctx) {
-            if (record->event.pressed) {
-                register_code(MS_RGHT);
-            } else {
-                unregister_code(MS_RGHT);
-            }
-        } else {
-            if (record->event.pressed) {
-                menu_pressed = true;
-                menu_held    = false;
-                menu_timer   = timer_read();
-            } else {
-                menu_pressed = false;
-                if (menu_held) {
-                    menu_held = false; // KC_APP already fired in matrix_scan_user
-                } else {
-                    tap_code(KC_RGHT);
+    // ---- 按键短暂亮灯：按键触发（按物理矩阵位取灯，兼容 MT/MO） ----
+    if (record->event.pressed && record->event.key.row < MATRIX_ROWS && record->event.key.col < MATRIX_COLS) {
+        uint8_t led = g_led_config.matrix_co[record->event.key.row][record->event.key.col];
+        if (led != NO_LED) {
+            for (uint8_t i = 0; i < FLASH_LED_COUNT; i++) {
+                if (flash_led[i] == led) {
+                    uint16_t t    = timer_read();
+                    flash_time[i] = t ? t : 1;
+                    break;
                 }
             }
         }
+    }
+
+    // ---- Fn + Esc (physical [0,0]) held >= 3s = EEPROM reset (see matrix_scan_user).
+    //      Esc 释放时无条件解除 arming（先松 Fn 再松 Esc 也不能留下悬空触发）。 ----
+    if (record->event.key.row == 0 && record->event.key.col == 0) {
+        if (!record->event.pressed) {
+            reset_armed = false;
+        } else if (fn_layer_active() && !reset_armed) {
+            reset_armed = true;
+            reset_fired = false;
+            reset_timer = timer_read();
+        }
+        if (fn_layer_active()) return false; // Fn+Esc 吞掉，不输出
+    }
+
+    // ---- Menu key: Normal = pointer right; other modes = tap Right / hold Menu.
+    //      按下时记录上下文，避免中途切换导致卡键 / 误发 KC_APP。 ----
+    if (keycode == MENU_TAP_RIGHT) {
+        if (record->event.pressed) {
+            if (mouse_ctx) {
+                menu_ms_held = true;
+                register_code(MS_RGHT);
+            } else {
+                menu_pressed = true;
+                menu_held    = false;
+                menu_timer   = timer_read();
+            }
+        } else {
+            if (menu_ms_held) {
+                menu_ms_held = false;
+                unregister_code(MS_RGHT);
+            } else if (menu_pressed) {
+                menu_pressed = false;
+                if (!menu_held) tap_code(KC_RGHT);
+                menu_held = false;
+            }
+        }
         return false;
     }
 
-    // ---- Normal-mode mouse movement: the bottom-row direction keys.
-    //      While held they drive the pointer (mousekey acceleration); the
-    //      tap-hold mod/layer of these keys is overridden in this context. ----
-    if (mouse_ctx) {
-        uint8_t ms = 0;
+    // ---- Normal-mode mouse movement: bottom-row direction keys (hold).
+    //      记录实际注册的方向，切上下文后仍能在松开时反注册（防卡指针）。 ----
+    {
+        int8_t   ms_i  = -1;
+        uint16_t ms_kc = 0;
         if (keycode == MT(MOD_RALT, KC_LEFT) || keycode == MT(MOD_RGUI, KC_LEFT)) {
-            ms = MS_LEFT;
+            ms_i = 0; ms_kc = MS_LEFT;
         } else if (keycode == MT(MOD_RCTL, KC_DOWN)) {
-            ms = MS_DOWN;
+            ms_i = 1; ms_kc = MS_DOWN;
         } else if (keycode == MT(MOD_RSFT, KC_UP)) {
-            ms = MS_UP;
+            ms_i = 2; ms_kc = MS_UP;
         }
-        if (ms) {
+        if (ms_i >= 0) {
             if (record->event.pressed) {
-                register_code(ms);
-            } else {
-                unregister_code(ms);
+                if (mouse_ctx) {
+                    register_code(ms_kc);
+                    ms_move_held[ms_i] = true;
+                    return false;
+                }
+            } else if (ms_move_held[ms_i]) {
+                unregister_code(ms_kc);
+                ms_move_held[ms_i] = false;
+                return false;
             }
-            return false;
         }
     }
 
-    // ---- Space mouse leak-guard: release outside the mouse context while
-    // dragging/still pending must not leave a stuck left button ----
-    if (!record->event.pressed && !mouse_ctx && (spc_holding || spc_press_timer)) {
-        unregister_code(MS_BTN1);
-        spc_holding     = false;
-        spc_press_timer = 0;
+    // ---- Space / Enter mouse leak-guard: 离开鼠标上下文松开时不留卡键 ----
+    if (!record->event.pressed && !mouse_ctx) {
+        if (spc_holding || spc_press_timer) {
+            unregister_code(MS_BTN1);
+            spc_holding     = false;
+            spc_press_timer = 0;
+        }
+        if (ent_holding || ent_press_timer) {
+            unregister_code(MS_BTN2);
+            ent_holding     = false;
+            ent_press_timer = 0;
+        }
     }
 
     // ---- Right Shift combos ----
@@ -470,9 +545,24 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
-    // ---- Alt+Tab: pass Tab through with the held Alt so the task switcher
-    // stays open; vim Normal mode would tap LALT(Tab), releasing Alt. ----
-    if (keycode == KC_TAB && (mods & MOD_MASK_ALT)) {
+    // ---- Normal-mode Enter: 鼠标右键（短按单击 / 长按保持） ----
+    if (mouse_ctx && keycode == KC_ENT) {
+        if (record->event.pressed) {
+            ent_press_timer = timer_read();
+        } else {
+            if (ent_holding) {
+                unregister_code(MS_BTN2);
+                ent_holding = false;
+            } else if (ent_press_timer) {
+                tap_code(MS_BTN2);
+            }
+            ent_press_timer = 0;
+        }
+        return false;
+    }
+
+    // ---- 普通模式 Tab 直接透传（真实按下 / 抬起 / 重复），使 Alt+Tab 自然工作 ----
+    if (keycode == KC_TAB) {
         return true;
     }
 
@@ -494,7 +584,7 @@ void matrix_scan_user(void) {
     // Fn + Esc held >= 3s: full EEPROM reset (compiled keymap gets reloaded
     // via eeconfig_init() -> eeconfig_init_via() -> dynamic_keymap_reset()),
     // then reboot.
-    if (reset_armed && !reset_fired && timer_elapsed(reset_timer) >= RESET_HOLD_MS) {
+    if (reset_armed && !reset_fired && fn_layer_active() && timer_elapsed(reset_timer) >= RESET_HOLD_MS) {
         reset_fired = true;
         reset_armed = false;
         clear_keyboard();
@@ -513,6 +603,13 @@ void matrix_scan_user(void) {
         get_mods() == 0) {
         register_code(MS_BTN1);
         spc_holding = true;
+    }
+
+    // Enter long press (Normal mode): hold the right button until release.
+    if (ent_press_timer && !ent_holding && timer_elapsed(ent_press_timer) >= ENT_HOLD_TIME && vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && !replace_active &&
+        get_mods() == 0) {
+        register_code(MS_BTN2);
+        ent_holding = true;
     }
 }
 
@@ -555,20 +652,20 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         }
     }
 
-    // ---- 26 letters: key-triggered brief flash, follow the global hue ----
+    // ---- 按键短暂亮灯：跟随全局色相，亮度线性衰减；不亮时置 0（退出全局动画） ----
     if (!(Key_Fn_Status || Led_Rf_Pair_Flg || User_Power_Low || Test_Led)) {
         uint8_t hue = rgb_matrix_get_hue();
-        for (uint8_t i = 0; i < 26; i++) {
-            uint8_t idx = letter_led[i];
-            if (letter_flash[i]) {
-                uint16_t elapsed = timer_elapsed(letter_flash[i]);
-                if (elapsed < LETTER_FLASH_MS) {
-                    uint8_t v   = (uint8_t)((uint16_t)RGB_MATRIX_MAXIMUM_BRIGHTNESS * (LETTER_FLASH_MS - elapsed) / LETTER_FLASH_MS);
+        for (uint8_t i = 0; i < FLASH_LED_COUNT; i++) {
+            uint8_t idx = flash_led[i];
+            if (flash_time[i]) {
+                uint16_t elapsed = timer_elapsed(flash_time[i]);
+                if (elapsed < FLASH_MS) {
+                    uint8_t v   = (uint8_t)((uint16_t)RGB_MATRIX_MAXIMUM_BRIGHTNESS * (FLASH_MS - elapsed) / FLASH_MS);
                     hsv_t   hsv = {.h = hue, .s = 255, .v = v};
                     rgb_t   rgb = hsv_to_rgb(hsv);
                     rgb_matrix_set_color(idx, rgb.r, rgb.g, rgb.b);
                 } else {
-                    letter_flash[i] = 0;
+                    flash_time[i] = 0;
                     rgb_matrix_set_color(idx, 0, 0, 0);
                 }
             } else {
