@@ -233,7 +233,7 @@ make leku/nut65:vim:flash
 
 ## 十四、修复历史（已知问题，均已修复）
 
-- **dd 末行（C1）**：`count==1` 用**无选区 `Ctrl+X`** 剪切整行（linewise，末行亦可）；`count>1` 用 `Home + Shift+Down×count + Ctrl+X`。见 `qmk-vim/src/actions.c`（多行且行组含文件末行时仍为近似）。
+- **dd（末行可删）**：`Home`×2 → `Shift+End`（选中本行文本）→ `Ctrl+X`（单次剪切，进剪贴板，`p` 可粘）→ `Backspace`（删掉残留空行的前换行）；`Ndd` 先按 count 扩展选区。**首行会留一个空行**。因剪切+退格是两次主机编辑，引擎用 `vim_extra_undos` 让一次 `u` / 重做自动重复一次，从而一次恢复/重做（切到其它键后失效）。见 `qmk-vim/src/{actions,modes}.c`。
 - **dd 后 k 误删行**：dd 执行完必须调 `normal_mode()` 清 pending，否则 `process_func` 停在 `process_vim_action`、后续 motion 会再触发 delete。Esc 短按/长按在 Normal 模式也先 `normal_mode()` 取消 pending operator。
 - **可视模式（Visual / Visual Line）Esc 退出**：可视模式下 Esc 直接落到 qmk-vim 原生处理（真实 Esc 退出）。
 - **R 替换模式 Esc 无法退出 / 底条不恢复**：`normal_mode_user` 需用强符号覆盖（weak 会随机选中导致 `replace_active` 不清）。
