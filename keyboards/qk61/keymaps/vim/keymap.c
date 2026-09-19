@@ -26,6 +26,7 @@ extern void mcu_reset(void);
 
 #ifdef VIM_DOT_REPEAT
 extern void add_repeat_keycode(uint16_t keycode);
+extern void finish_recording_repeat(void);
 #endif
 
 enum layers {
@@ -163,6 +164,13 @@ static bool     menu_ms_held = false; // 本次按下已 register MS_RGHT
 
 /* ===== 已注册的鼠标方向键（切上下文后仍能在松开时反注册，防卡指针）===== */
 static bool ms_move_held[3] = {false, false, false}; // 0=left 1=down 2=up
+
+/* ===== Space/Enter 按下是否已被鼠标上下文接管（决定抬起是否消费）===== */
+static bool spc_ms_pressed = false;
+static bool ent_ms_pressed = false;
+
+/* ===== Fn+Esc：按下被 Fn 吞掉时，抬起同样吞掉，避免先松 Fn 漏出真 Esc ===== */
+static bool fn_esc_swallow = false;
 
 /* ===== Fn + Esc held >= 3s = reset EEPROM (eeconfig_init) + reboot ===== */
 #define RESET_HOLD_MS 3000
@@ -316,20 +324,22 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
 // Right Shift combos: Right Shift + Esc = grave (add left Shift for ~),
 // Right Shift + 1..0/-/= = F1..F12. Any other key keeps normal right-shift
 // behaviour. Always mask with the 8-bit MOD_BIT_* constants.
+// The key consumed on press is remembered so its release is also swallowed even
+// if Shift was released first.
+static uint16_t shift_combo_kc = KC_NO;
 static bool pr_shift_combos(uint16_t keycode, keyrecord_t *record, uint8_t mods) {
-    if ((keycode == KC_ESC) && (mods & MOD_BIT_LSHIFT) &&
-        !(mods & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
-        if (record->event.pressed) {
+    if (record->event.pressed) {
+        if ((keycode == KC_ESC) && (mods & MOD_BIT_LSHIFT) &&
+            !(mods & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
             uint8_t saved_mods = get_mods();
             clear_mods();
             tap_code16(LSFT(KC_GRV)); // ~
             set_mods(saved_mods);
+            shift_combo_kc = keycode;
+            return true;
         }
-        return true;
-    }
-    if ((mods & MOD_BIT_RSHIFT) &&
-        (keycode == KC_ESC || (keycode >= KC_1 && keycode <= KC_0) || keycode == KC_MINS || keycode == KC_EQL)) {
-        if (record->event.pressed) {
+        if ((mods & MOD_BIT_RSHIFT) &&
+            (keycode == KC_ESC || (keycode >= KC_1 && keycode <= KC_0) || keycode == KC_MINS || keycode == KC_EQL)) {
             uint16_t repl;
             if (keycode == KC_ESC) {
                 repl = KC_GRV;
@@ -345,13 +355,29 @@ static bool pr_shift_combos(uint16_t keycode, keyrecord_t *record, uint8_t mods)
             clear_mods();
             tap_code16(repl);
             set_mods(saved_mods);
+            shift_combo_kc = keycode;
+            return true;
         }
+    } else if (shift_combo_kc == keycode) {
+        // press was consumed as a combo: swallow the matching release too
+        shift_combo_kc = KC_NO;
         return true;
     }
     return false;
 }
 
 // Esc: short tap sends a real Esc; long press switches to Normal mode.
+#ifdef VIM_DOT_REPEAT
+#    define FINISH_INSERT_REPEAT()      \
+        do {                            \
+            add_repeat_keycode(KC_ESC); \
+            finish_recording_repeat();  \
+        } while (0)
+#else
+#    define FINISH_INSERT_REPEAT() \
+        do {                       \
+        } while (0)
+#endif
 static bool pr_esc(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t vmode) {
     if (keycode != KC_ESC || !vim_on) return false;
 
@@ -361,6 +387,7 @@ static bool pr_esc(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t v
             esc_swallow_release = true;
         } else if (replace_active) {
             normal_mode();
+            FINISH_INSERT_REPEAT();
             esc_swallow_release = true;
         } else {
             if (vmode != INSERT_MODE) {
@@ -375,6 +402,7 @@ static bool pr_esc(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t v
         } else if (esc_press_timer && timer_elapsed(esc_press_timer) >= ESC_HOLD_TIME) {
             esc_press_timer = 0;
             normal_mode();
+            FINISH_INSERT_REPEAT(); // 长按 Esc 由 keymap 直接退出 Insert，需补收尾
         } else {
             esc_press_timer = 0;
             tap_code(KC_ESC);
@@ -388,7 +416,7 @@ static bool pr_esc(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t v
 static bool pr_caps(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t vmode) {
     if (keycode != KC_CAPS) return false;
 
-    bool fn_active = IS_LAYER_ON(_WIN_FN) || IS_LAYER_ON(_MAC_FN);
+    bool fn_active = fn_layer_active();
     if (fn_active) {
         if (record->event.pressed) {
             toggle_vim_mode();
@@ -445,14 +473,23 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
 
     // ---- Fn + Esc (physical [0,0]) held >= 3s = EEPROM reset (see matrix_scan_user).
-    //      Esc 释放时无条件解除 arming（先松 Fn 再松 Esc 也不能留下悬空触发）。 ----
+    //      按下若在 Fn 层：吞掉并置 flag；抬起时按 flag 吞掉（先松 Fn 也不漏真 Esc）。 ----
     if (record->event.key.row == 0 && record->event.key.col == 0) {
-        if (!record->event.pressed) {
+        if (record->event.pressed) {
+            if (fn_layer_active()) {
+                fn_esc_swallow = true;
+                if (!reset_armed) {
+                    reset_armed = true;
+                    reset_fired = false;
+                    reset_timer = timer_read();
+                }
+            }
+        } else {
             reset_armed = false;
-        } else if (fn_layer_active() && !reset_armed) {
-            reset_armed = true;
-            reset_fired = false;
-            reset_timer = timer_read();
+            if (fn_esc_swallow) {
+                fn_esc_swallow = false;
+                return false;
+            }
         }
         if (fn_layer_active()) return false; // Fn+Esc 吞掉，不输出
     }
@@ -509,20 +546,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
-    // ---- Space / Enter mouse leak-guard: 离开鼠标上下文松开时不留卡键 ----
-    if (!record->event.pressed && !mouse_ctx) {
-        if (spc_holding || spc_press_timer) {
-            unregister_code(MS_BTN1);
-            spc_holding     = false;
-            spc_press_timer = 0;
-        }
-        if (ent_holding || ent_press_timer) {
-            unregister_code(MS_BTN2);
-            ent_holding     = false;
-            ent_press_timer = 0;
-        }
-    }
-
     // ---- Right Shift combos ----
     if (pr_shift_combos(keycode, record, mods)) return false;
 
@@ -530,11 +553,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (pr_esc(keycode, record, vim_on, vmode)) return false;
     if (pr_caps(keycode, record, vim_on, vmode)) return false;
 
-    // ---- Space in Normal mode: left click / drag ----
-    if (mouse_ctx && keycode == KC_SPC) {
+    // ---- Space in Normal mode: left click / drag（抬起仅当按下被接管时消费）----
+    if (keycode == KC_SPC) {
         if (record->event.pressed) {
-            spc_press_timer = timer_read();
-        } else {
+            if (mouse_ctx) {
+                spc_ms_pressed  = true;
+                spc_press_timer = timer_read();
+                return false;
+            }
+        } else if (spc_ms_pressed) {
+            spc_ms_pressed = false;
             if (spc_holding) {
                 unregister_code(MS_BTN1);
                 spc_holding = false;
@@ -542,15 +570,20 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 tap_code(MS_BTN1);
             }
             spc_press_timer = 0;
+            return false;
         }
-        return false;
     }
 
-    // ---- Normal-mode Enter: 鼠标右键（短按单击 / 长按保持） ----
-    if (mouse_ctx && keycode == KC_ENT) {
+    // ---- Normal-mode Enter: 鼠标右键（短按单击 / 长按保持；抬起仅当按下被接管时消费）----
+    if (keycode == KC_ENT) {
         if (record->event.pressed) {
-            ent_press_timer = timer_read();
-        } else {
+            if (mouse_ctx) {
+                ent_ms_pressed  = true;
+                ent_press_timer = timer_read();
+                return false;
+            }
+        } else if (ent_ms_pressed) {
+            ent_ms_pressed = false;
             if (ent_holding) {
                 unregister_code(MS_BTN2);
                 ent_holding = false;
@@ -558,8 +591,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 tap_code(MS_BTN2);
             }
             ent_press_timer = 0;
+            return false;
         }
-        return false;
     }
 
     // ---- 普通模式 Tab 直接透传（真实按下 / 抬起 / 重复），使 Alt+Tab 自然工作 ----
@@ -594,7 +627,8 @@ void matrix_scan_user(void) {
     }
 
     // Menu long press (non-mouse context): Menu/application key.
-    if (menu_pressed && !menu_held && timer_elapsed(menu_timer) >= TAPPING_TERM) {
+    // Win-Lock 时抑制 KC_APP（与厂商 case KC_APP 一致；合成键不经 process_record_kb）。
+    if (menu_pressed && !menu_held && !Keyboard_Info.Win_Lock && timer_elapsed(menu_timer) >= TAPPING_TERM) {
         menu_held = true;
         tap_code(KC_APP);
     }
@@ -653,9 +687,11 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         }
     }
 
-    // ---- Win 键常亮（不参与按键短亮）----
+    // ---- Win 键常亮（跟随全局色相，不参与按键短亮）----
     if (!special) {
-        rgb_matrix_set_color(54, 0xFF, 0xFF, 0xFF);
+        hsv_t hsv = {.h = rgb_matrix_get_hue(), .s = 255, .v = RGB_MATRIX_MAXIMUM_BRIGHTNESS};
+        rgb_t rgb = hsv_to_rgb(hsv);
+        rgb_matrix_set_color(54, rgb.r, rgb.g, rgb.b);
     }
 
     // ---- 按键短暂亮灯：跟随全局色相，亮度线性衰减；不亮时置 0（退出全局动画） ----
