@@ -40,6 +40,7 @@ enum layers {
     _MBL,
     _MFL,
     _DEFA,
+    _FN,
 };
 
 // clang-format off
@@ -49,7 +50,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   KC_WFWD,
         KC_CAPS,  KC_A,       KC_S,       KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,    KC_WBAK,
         KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  KC_RSFT,  KC_UP,     KC_END,
-        KC_LCTL,  KC_LCMD,    KC_LALT,                        KC_SPC,                                           MO(_FL),    KC_RALT,  KC_LEFT,  KC_DOWN,   KC_RGHT,
+        KC_LCTL,  KC_LCMD,    KC_LALT,                        KC_SPC,                                           MO(_FN),    KC_RALT,  KC_LEFT,  KC_DOWN,   KC_RGHT,
         KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
         ),
 
@@ -67,7 +68,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   KC_DEL,
         KC_CAPS,  KC_A,       KC_S,       KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,    KC_PGUP,
         KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  KC_RSFT,  KC_UP,     KC_PGDN,
-        KC_LCTL,  KC_LALT,    KC_LCMD,                        KC_SPC,                                           MO(_MFL),   KC_RCMD,  KC_LEFT,  KC_DOWN,   KC_RGHT,
+        KC_LCTL,  KC_LALT,    KC_LCMD,                        KC_SPC,                                           MO(_FN),    KC_RCMD,  KC_LEFT,  KC_DOWN,   KC_RGHT,
         KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
         ),
 
@@ -86,6 +87,15 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______,  _______,    _______,    _______,  _______,  _______,  _______,  _______,  _______,  KC_TEST,  _______,    _______,            _______,   _______,
         _______,              _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,   _______,
         _______,  _______,    _______,                        _______,                                          _______,    _______,  _______,  _______,   _______,
+        KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
+        ),
+
+    [_FN] = LAYOUT(  /* myfn 新 Fn 层（约定：音量/蓝牙/2.4G/有线/电量/F1-F10/初始化） */
+        EE_CLR,   KC_F1,      KC_F2,      KC_F3,    KC_F4,    KC_F5,    KC_F6,    KC_F7,    KC_F8,    KC_F9,    KC_F10,     KC_VOLD,  KC_VOLU,  _______,   _______,
+        _______,  KC_BT1,     KC_BT2,     KC_BT3,   KC_2G4,   KC_USB,   _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,   _______,
+        _______,  _______,    _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,    _______,            _______,   _______,
+        _______,              _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,   _______,
+        _______,  _______,    _______,                        HS_BATQ,                                          _______,    _______,  _______,  _______,   _______,
         KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
         ),
 
@@ -125,7 +135,8 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [1] = {ENCODER_CCW_CW(_______, _______)},
     [2] = {ENCODER_CCW_CW(_______, _______)},
     [3] = {ENCODER_CCW_CW(_______, _______)},
-    [4] = {ENCODER_CCW_CW(_______, _______)}
+    [4] = {ENCODER_CCW_CW(_______, _______)},
+    [5] = {ENCODER_CCW_CW(_______, _______)}
 };
 #endif
 
@@ -487,7 +498,7 @@ static bool pr_esc(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t v
 static bool pr_caps(uint16_t keycode, keyrecord_t *record, bool vim_on, uint8_t vmode) {
     if (keycode != KC_CAPS) return false;
 
-    bool fn_active = IS_LAYER_ON(_FL) || IS_LAYER_ON(_MFL);
+    bool fn_active = IS_LAYER_ON(_FN) || IS_LAYER_ON(_FL) || IS_LAYER_ON(_MFL);
     if (fn_active) {
         if (record->event.pressed) {
             toggle_vim_mode();

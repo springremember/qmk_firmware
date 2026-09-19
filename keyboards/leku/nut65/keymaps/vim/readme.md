@@ -132,11 +132,12 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 ## 五、与厂商固件的差异
 
 键盘层定义（keymap）中：
-- `_FL`（win FN 层）：`-`/`=` 已改为**音量减/增**（用户许可），其余与厂商默认一致；`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认逐键一致
+- **新增 `_FN`（myfn 新 Fn 层）**：底排 `Fn` 键由 `MO(_FL)`/`MO(_MFL)` 改为 **`MO(_FN)`**。`_FN` 内容遵循 `qmk-myfn` 约定：`-`/`=`=音量、`Q/W/E`=蓝牙 1/2/3、`R`=2.4G、`T`=有线（`KC_USB`）、`Space`=电量（`HS_BATQ`）、`Esc`=初始化（`EE_CLR`）、`1..0`=F1..F10；其余透传。
+- `_FL` / `_MFL`（原厂 Fn 层）**原样保留、仅无进入途径**；`_DEFA` 亦然。
 - `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（End；Normal 模式下=鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave/F 区）见上文
 - `_BL` / `_MBL` 底排：**右 `Alt` 与 `Fn` 位置对调**（Mac 层为 右 `Cmd` 与 `Fn` 对调）——Win：`… Space, Fn, 右Alt, ←, ↓, →`；Mac：`… Space, Fn, 右Cmd, ←, ↓, →`
 
-所有 Vim 功能均为键码拦截实现，不新增/改造任何层。
+`Fn+Caps` 开关 Vim、`Fn+Esc` 初始化等由 keymap 在 `_FN` 激活时处理；Vim 功能仍为键码拦截实现。
 
 仅对 `keyboards/leku/nut65/nut65.c` 做了 3 处最小改动（为让出 keymap 级钩子）：
 1. `process_record_user` 重命名为 `hs_process_record_user`（RGB 录制逻辑，原样保留）
@@ -187,8 +188,8 @@ make leku/nut65:vim:flash
 - 型号：nut65（LEKU）
 - 厂家源码：https://github.com/hangshengkeji/qmk_firmware/tree/master/keyboards/leku/nut65
 - MCU：WB32FQ95（ARM，`wb32-dfu` bootloader）
-- 三模：USB / 蓝牙×3 / 2.4G；RGB Matrix（键位 82 灯 + 底部灯条 80 灯）；旋钮编码器；VIA（5 层动态键位）
-- 矩阵 6×15，LAYOUT 82 键；默认 5 层：`_BL` / `_FL` / `_MBL` / `_MFL` / `_DEFA`
+- 三模：USB / 蓝牙×3 / 2.4G；RGB Matrix（键位 82 灯 + 底部灯条 80 灯）；旋钮编码器；VIA（6 层动态键位）
+- 矩阵 6×15，LAYOUT 82 键；默认 6 层：`_BL` / `_FL` / `_MBL` / `_MFL` / `_DEFA` / `_FN`
 
 ## 九、项目目标与约束
 
@@ -225,12 +226,12 @@ make leku/nut65:vim:flash
 
 ## 十三、文件结构与产物
 
-- `keyboards/leku/nut65/keymaps/vim/`（`keymap.c` / `config.h` / `rules.mk` / `readme.md` / `qmk-vim/`）
+- `keyboards/leku/nut65/keymaps/vim/`（`keymap.c` / `config.h` / `rules.mk` / `readme.md` / `qmk-vim/`（**子模块**：`git@github.com:springremember/qmk-vim.git`））
 - `output/`：`leku_nut65_default.bin`（基线）+ `leku_nut65_vim.bin`（vim 固件）
 
 ## 十四、修复历史（已知问题，均已修复）
 
-- **dd 最后一行不删除**：原 `Home+Shift+Down` 在末行无换行选不中；改为逐行 `Home+Shift+End` 剪切 + `Delete` 吃掉本行换行，任意行/空行均正确（`actions.c` dd 分支）。
+- **dd 末行（C1）**：`count==1` 用**无选区 `Ctrl+X`** 剪切整行（linewise，末行亦可）；`count>1` 用 `Home + Shift+Down×count + Ctrl+X`。见 `qmk-vim/src/actions.c`（多行且行组含文件末行时仍为近似）。
 - **dd 后 k 误删行**：dd 执行完必须调 `normal_mode()` 清 pending，否则 `process_func` 停在 `process_vim_action`、后续 motion 会再触发 delete。Esc 短按/长按在 Normal 模式也先 `normal_mode()` 取消 pending operator。
 - **可视模式（Visual / Visual Line）Esc 退出**：可视模式下 Esc 直接落到 qmk-vim 原生处理（真实 Esc 退出）。
 - **R 替换模式 Esc 无法退出 / 底条不恢复**：`normal_mode_user` 需用强符号覆盖（weak 会随机选中导致 `replace_active` 不清）。
