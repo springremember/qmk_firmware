@@ -18,9 +18,9 @@
 // These + VIM_REDO (defined above) are the main keys for each vim core vim action
 #define VIM_CHANGE KC_DEL
 #define VIM_DELETE VCMD(KC_X) // note that you may prefer a simple delete here since we only are using one clipboard
-#define VIM_YANK VIM_MAC_NOMAC(LCMD(LSFT(KC_C)), LCTL(LSFT(KC_C)))
+#define VIM_YANK VCMD(KC_C)
 // Other commands
-#define VIM_PASTE VIM_MAC_NOMAC(LCMD(LSFT(KC_V)), LCTL(LSFT(KC_V)))
+#define VIM_PASTE VCMD(KC_V)
 #define VIM_UNDO VCMD(KC_Z)
 #define VIM_FIND VCMD(KC_F)
 #define VIM_SAVE VCMD(KC_S)
