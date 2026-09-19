@@ -106,8 +106,10 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | 右 `Shift` + `Esc`（仅右 `Shift`） | `` ` `` |
 | 右 `Shift` + `1` `2` `…` `0` `-` `=` | F1 F2 … F10 F11 F12 |
 
-> Insert 模式下数字键不再长按出 F 区（已取消），普通数字输入即可；`Ctrl` + 数字在 Insert 模式仍映射为 Ctrl+F1~F10。
+> Insert 模式下数字键不再长按出 F 区（已取消），普通数字输入即可；**右 `Ctrl` + 数字**在 Insert 模式映射为 F1~F10，**左 `Ctrl` + 数字**为普通 Ctrl+数字（不触发 F 区）。
 > 说明：`Fn` + 数字（layer 1）仍是厂商原厂的 F1~F12，未做任何改动。
+>
+> 底排已将**右 `Alt` 与 `Fn` 位置对调**（Mac 层为 右 `Cmd` 与 `Fn` 对调）：Win 层为 `… Space, Fn, 右Alt, ←, ↓, →`；Mac 层为 `… Space, Fn, 右Cmd, ←, ↓, →`。
 
 ## 四、Vim 状态指示（RGB）
 
@@ -132,6 +134,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 键盘层定义（keymap）中：
 - `_FL`（win FN 层）：`-`/`=` 已改为**音量减/增**（用户许可），其余与厂商默认一致；`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认逐键一致
 - `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（End；Normal 模式下=鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave/F 区）见上文
+- `_BL` / `_MBL` 底排：**右 `Alt` 与 `Fn` 位置对调**（Mac 层为 右 `Cmd` 与 `Fn` 对调）——Win：`… Space, Fn, 右Alt, ←, ↓, →`；Mac：`… Space, Fn, 右Cmd, ←, ↓, →`
 
 所有 Vim 功能均为键码拦截实现，不新增/改造任何层。
 

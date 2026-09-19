@@ -49,7 +49,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   KC_WFWD,
         KC_CAPS,  KC_A,       KC_S,       KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,    KC_WBAK,
         KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  KC_RSFT,  KC_UP,     KC_END,
-        KC_LCTL,  KC_LCMD,    KC_LALT,                        KC_SPC,                                           KC_RALT,    MO(_FL),  KC_LEFT,  KC_DOWN,   KC_RGHT,
+        KC_LCTL,  KC_LCMD,    KC_LALT,                        KC_SPC,                                           MO(_FL),    KC_RALT,  KC_LEFT,  KC_DOWN,   KC_RGHT,
         KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
         ),
 
@@ -67,7 +67,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   KC_DEL,
         KC_CAPS,  KC_A,       KC_S,       KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,    KC_PGUP,
         KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  KC_RSFT,  KC_UP,     KC_PGDN,
-        KC_LCTL,  KC_LALT,    KC_LCMD,                        KC_SPC,                                           KC_RCMD,    MO(_MFL), KC_LEFT,  KC_DOWN,   KC_RGHT,
+        KC_LCTL,  KC_LALT,    KC_LCMD,                        KC_SPC,                                           MO(_MFL),   KC_RCMD,  KC_LEFT,  KC_DOWN,   KC_RGHT,
         KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
         ),
 
@@ -685,8 +685,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
 
     // Insert mode digit keys: plain digits pass straight through (no more
-    // long-press F-row). Ctrl+digit still emits Ctrl+F1..F10.
-    if (vmode == INSERT_MODE && keycode >= KC_1 && keycode <= KC_0 && (mods & MOD_MASK_CTRL) && record->event.pressed) {
+    // long-press F-row). Right Ctrl + digit emits F1..F10; Left Ctrl is left alone.
+    if (vmode == INSERT_MODE && keycode >= KC_1 && keycode <= KC_0 && (mods & MOD_BIT(KC_RCTL)) && record->event.pressed) {
         uint8_t num = (keycode == KC_0) ? 10 : (keycode - KC_1 + 1);
         tap_code(KC_F1 + num - 1);
         return false;
