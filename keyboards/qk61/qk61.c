@@ -63,6 +63,16 @@ static void soft_sleep_exit(void) {
     Keyboard_Status.System_Sleep_Mode = 0;
     Last_Activity_Ms                  = timer_read32();
 
+    // 别立刻回 ACK 睡眠（否则模块会马上再次入睡），并主动唤醒模块。
+    Keyboard_Status.System_Work_Status = 0;
+    Spi_Send_Commad(USER_KEYBOARD_WAKEUP);
+
+    // 重跑一次 RF 上电握手，让模块重新建立链路（等价于厂商唤醒路径里
+    // Board_Wakeup_Init() 做的 Init_Spi_Power_Up 重握手）。
+    Init_Spi_Power_Up    = true;
+    Init_Spi_100ms_Delay = 0;
+    Spi_Interval         = SPI_DELAY_RF_TIME;
+
     // The host may have dropped the BLE link while we were asleep.  Re-send
     // the current mode to the RF module so it re-establishes the connection.
     Mode_Synchronization_Signal = true;
