@@ -495,6 +495,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
+    // ---- 左Ctrl + 左Alt + 退格 = Ctrl+Alt+Delete ----
+    if (keycode == KC_BSPC && (mods & MOD_BIT(KC_LCTL)) && (mods & MOD_BIT(KC_LALT))) {
+        if (record->event.pressed) {
+            tap_code(KC_DEL); // 已按住的 LCTL/LALT 会带出 Ctrl+Alt+Del
+        }
+        return false; // 吞掉原退格
+    }
+
     // ---- Fn + Esc (physical [0,0]) held >= 3s = EEPROM reset (see matrix_scan_user).
     //      按下若在 Fn 层：吞掉并置 flag；抬起时按 flag 吞掉（先松 Fn 也不漏真 Esc）。 ----
     if (record->event.key.row == 0 && record->event.key.col == 0) {
