@@ -338,9 +338,9 @@
         "speed_steps": 40,
         "val_steps": 32,
         "default": {
-            "animation": "cycle_left_right",
-            "speed": 135,
-            "val": 96
+            "animation": "solid_reactive_simple",
+            "speed": 38,
+            "val": 153
         }
     },
     "rgblight": {

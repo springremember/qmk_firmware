@@ -110,6 +110,16 @@
 #define RGB_MATRIX_KEYPRESSES
 // #define RGB_TRIGGER_ON_KEYDOWN
 
+// Global default effect is Solid Reactive Nexus at 60% brightness in the
+// colour #ff4efd (HSV 213/177). Hue/sat are not generated from
+// keyboard.json, so they live here (val/speed/mode come from keyboard.json).
+#ifndef RGB_MATRIX_DEFAULT_HUE
+#    define RGB_MATRIX_DEFAULT_HUE 213
+#endif
+#ifndef RGB_MATRIX_DEFAULT_SAT
+#    define RGB_MATRIX_DEFAULT_SAT 177
+#endif
+
 /* RGB Light */
 #define RGBLED_NUM 80
 #define RGBLIGHT_CUSTOM_DRIVER
