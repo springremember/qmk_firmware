@@ -731,12 +731,16 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
             if (Keyboard_Info.Win_Lock) {
                 record->event.pressed = false;
             }
-        } return true;
+            // 转交 keymap（按键闪灯等）
+            return process_record_user(keycode, record);
+        }
         case KC_RGUI: {                                             //key_win_r
             if (Keyboard_Info.Win_Lock) {
                 record->event.pressed = false;
             }
-        } return true;
+            // 转交 keymap（按键闪灯等）
+            return process_record_user(keycode, record);
+        }
         case KC_APP: {                                              //key_app
             if (Keyboard_Info.Win_Lock) {
                 record->event.pressed = false;
