@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include QMK_KEYBOARD_H
-#include "version.h"          // QMK_BUILDDATE (full build timestamp)
-#include "dynamic_keymap.h"   // dynamic_keymap_reset()
+#include "version.h"              // QMK_BUILDDATE (full build timestamp)
+#include "dynamic_keymap.h"       // dynamic_keymap_reset()
+#include "keymap_introspection.h" // keycode_at_keymap_location_raw()
 #include "qmk-vim/src/vim.h"
 #include "qmk-vim/src/modes.h"
 #include "qmk-vim/src/process_func.h"
@@ -35,6 +36,16 @@ enum layers {
 enum custom_keycodes {
     MENU_TAP_RIGHT = SAFE_RANGE,
 };
+
+/* Resolve every key from the compiled keymaps, ignoring the VIA dynamic keymap
+ * (which QK61 otherwise loads from EEPROM and which shadows keymaps/vim). This
+ * is a strong override of the weak keymap_key_to_keycode() in keymap_common.c. */
+uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {
+    if (key.row < MATRIX_ROWS && key.col < MATRIX_COLS) {
+        return keycode_at_keymap_location_raw(layer, key.row, key.col);
+    }
+    return KC_NO;
+}
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
