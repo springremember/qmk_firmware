@@ -443,7 +443,7 @@ static void logo_render(uint8_t led_min, uint8_t led_max) {
     }
 }
 
-bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
+bool qk61_indicators(uint8_t led_min, uint8_t led_max) {
     if (User_Power_Low) {
         Led_Power_Low_Show();
     } else if (Test_Led) {
@@ -477,6 +477,9 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
 
 bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
     logo_render(led_min, led_max);
+    qk61_indicators(led_min, led_max);
+    // The keymap's own indicator layer (vim mode / letter flash) runs last so
+    // it can override the vendor indicators where needed.
     return rgb_matrix_indicators_advanced_user(led_min, led_max);
 }
 
