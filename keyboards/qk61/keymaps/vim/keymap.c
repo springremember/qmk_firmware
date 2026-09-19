@@ -187,14 +187,15 @@ void myfn_battery(bool pressed) {
 }
 
 /* ===== 按键短暂亮灯 =====
- * LED 列表：26 字母 + Backspace/Tab/Enter/Shift/Ctrl/Win/Alt/Space/Menu。
- * 按物理矩阵位（g_led_config.matrix_co）触发，兼容 MT/MO 包裹键。 */
+ * LED 列表：26 字母 + Backspace/Tab/Enter/Shift/Ctrl/Alt/Space/Menu。
+ * 按物理矩阵位（g_led_config.matrix_co）触发，兼容 MT/MO 包裹键。
+ * 注意：Win(LED54) 不在此列，改为常亮（见 rgb 渲染）。 */
 #define FLASH_MS 200
 static const uint8_t flash_led[] = {
     // 26 字母（A-Z 对应灯位）
     29, 46, 44, 31, 17, 32, 33, 34, 22, 35, 36, 37, 48, 47, 23, 24, 15, 18, 30, 19, 21, 45, 16, 43, 20, 42,
-    // Bksp13 Tab14 Enter40 LShift41 RShift52 LCtrl53 LGUI54 LAlt55 Space56 RAlt/RGUI58 RCtrl59 Menu60
-    13, 14, 40, 41, 52, 53, 54, 55, 56, 58, 59, 60};
+    // Bksp13 Tab14 Enter40 LShift41 RShift52 LCtrl53 LAlt55 Space56 RAlt/RGUI58 RCtrl59 Menu60
+    13, 14, 40, 41, 52, 53, 55, 56, 58, 59, 60};
 #define FLASH_LED_COUNT (sizeof(flash_led) / sizeof(flash_led[0]))
 static uint16_t flash_time[FLASH_LED_COUNT] = {0};
 
@@ -650,6 +651,11 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
                 }
             }
         }
+    }
+
+    // ---- Win 键常亮（不参与按键短亮）----
+    if (!special) {
+        rgb_matrix_set_color(54, 0xFF, 0xFF, 0xFF);
     }
 
     // ---- 按键短暂亮灯：跟随全局色相，亮度线性衰减；不亮时置 0（退出全局动画） ----
