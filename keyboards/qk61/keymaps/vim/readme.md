@@ -23,11 +23,12 @@ Base 层 Esc 由 `QK_GESC` 改为 **`KC_ESC`**（供 vim 拦截）；`~` 仍可�
 | :--- | :--- | :--- | :--- | :--- |
 | 原 Menu | `KC_APP` | `LT(2, KC_LEFT)` | `←` | Fn 层 |
 | 右 Ctrl | `KC_RCTL` | `MT(MOD_RCTL, KC_DOWN)` | `↓` | 右 Ctrl |
-| 原 Fn | `MO(2)` | `MENU_TAP_RIGHT` | `→` | 鼠标右键（仅 Normal，一次） |
+| 原 Fn | `MO(2)` | `MENU_TAP_RIGHT` | `→`（Normal 下=鼠标右移） | `Enter`（仅 Normal） |
 | 右 Shift | `KC_RSFT` | `MT(MOD_RSFT, KC_UP)` | `↑` | 右 Shift |
 
 - 判定阈值 = QMK `TAPPING_TERM`（默认 **200ms**）。
-- `Fn` / 右 Ctrl / 右 Shift 使用 QMK 原生 `LT` / `MT`；Menu 键为自定义 tap-hold（`MENU_TAP_RIGHT`，在 `matrix_scan_user` 里过阈值触发一次鼠标右键）。
+- `Fn` / 右 Ctrl / 右 Shift 使用 QMK 原生 `LT` / `MT`；Menu 键为自定义 tap-hold（`MENU_TAP_RIGHT`）。
+- 在 Normal 鼠标上下文（见第五节）下这四个方向键不再触发 Fn / 右 Ctrl / 右 Shift，而是移动鼠标指针。
 
 ## 二、Vim 模式与开关
 
@@ -95,14 +96,18 @@ Normal 模式数字键作计数器（`VIM_NUMBERED_JUMPS`），可配合行操�
 
 ## 五、鼠标功能（部分移植）
 
-| 按键 | 条件 | 行为 |
-| :--- | :--- | :--- |
-| `Space` | Normal 模式、无修饰键、非替换模式 | 短按 = 鼠标左键单击；长按（≥200ms）= 按住左键拖动，松开释放 |
-| Menu 键（短按=`→`） | Normal 模式、无修饰键、非替换模式 | 长按（≥200ms）= 触发**一次**鼠标右键；此时不再发送 `Menu`（应用键） |
+在 Normal 模式、无修饰键、非替换模式（以下称「鼠标上下文」）下：
 
-- 鼠标按键通过 QMK `mousekey`（已启用）产生报告，由 qk61 的 `es_send_mouse` 按当前模式（USB / BLE / 2.4G）发送。
+| 按键 | 行为 |
+| :--- | :--- |
+| 底排四个方向键（原 Menu / 右 Ctrl / 右 Shift / 原 Fn 的轻按位，即 ← / ↓ / ↑ / →） | **按住移动鼠标指针**（←/↓/↑/→ 对应左/下/上/右；QMK mousekey 连续移动并加速），松开停止 |
+| `Space` | 短按 = 鼠标左键单击；长按（≥200ms）= 按住左键拖动，松开释放 |
+| Menu 键（= → 位） | 短按 = 鼠标右移；长按（≥200ms）= 停止移动并发送 `Enter` |
+
+- 这些方向键在此上下文内不再输出方向键、也不再触发各自的 Fn / 右 Ctrl / 右 Shift 层/修饰；离开该上下文（Insert / Visual / 替换模式，或按住修饰键）后恢复原生 tap-hold 行为。
+- Menu 键在非鼠标上下文：短按 = `→`，长按 = 无动作。
+- 鼠标报告通过 QMK `mousekey`（已启用）产生，由 qk61 的 `es_send_mouse` 按当前模式（USB / BLE / 2.4G）发送。
 - 与 NUT65 不同，QK61 的无线鼠标发送路径无需额外的连接门控（厂商栈无 NUT65 的队列洪泛问题）。
-- 仅在上述 Normal 上下文内产生鼠标：`Space` 在非该上下文时仍是普通空格 / vim 右移；Menu 键长按在非该上下文时不触发右键（也不发送 `Menu`），短按仍为 `→`。
 
 ## 六、灯效
 
@@ -135,7 +140,7 @@ A29 B46 C44 D31 E17 F32 G33 H34 I22 J35 K36 L37 M48 N47 O23 P24 Q15 R18 S30 T19 
 
 按需求**未移植**以下与 QK61 无关或硬件不兼容的部分：
 
-- **鼠标（部分未移植）**：方向键移动指针、左右方向键同按右键、End 键右键、鼠标加速连续移动等移除；仅保留 Space 左键（单击 / 长按拖动）与 Menu 长按右键（见第五节）。
+- **鼠标（部分移植）**：保留底排方向键移动指针、Space 左键（单击 / 长按拖动）、Menu 长按 = `Enter`；未移植 NUT65 的 End 键右键、左右方向键同按右键等（见第五节）。
 - **休眠与电源管理**：NUT65 的 `Ctrl+右Alt+Insert` 深睡组合、插拔线自动切回无线、`lpwr` 相关逻辑移除。QK61 沿用其自带的软睡眠（`Fn` + 回车位）。
 - NUT65 keymap 的 `rgb_record` 灯效录制、编码器音量等 QK61 不存在的部分未引入。
 

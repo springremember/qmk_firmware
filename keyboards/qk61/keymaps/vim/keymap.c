@@ -98,10 +98,15 @@ static bool     spc_holding     = false;
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
 
-/* ===== Menu key (tap = Right): long press = a single right click ===== */
-static uint16_t menu_timer   = 0;
-static bool     menu_pressed = false;
-static bool     menu_held    = false;
+/* ===== Menu key (tap = Right / mouse-right in Normal): =====
+ * In the Normal mouse context it moves the pointer (hold, via mousekey);
+ * a long press (>= MENU_HOLD_TIME) cancels the move and sends Enter. */
+#define MENU_HOLD_TIME 200
+static uint16_t menu_timer      = 0;
+static bool     menu_pressed    = false;
+static bool     menu_held       = false;
+static bool     menu_ms         = false; // registered MS_RGHT for this press
+static bool     menu_tap_arrow  = false; // non-mouse press -> tap emits Right
 
 /* ===== 26 letters: key-triggered brief flash =====
  * LED index per keycode KC_A..KC_Z, derived from g_led_config.matrix_co and
@@ -327,21 +332,52 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         letter_flash[keycode - KC_A] = t ? t : 1;
     }
 
-    // ---- Menu key tap-hold: tap = Right, long = one right click ----
+    // ---- Menu key: Normal = move pointer right (hold), long = Enter;
+    //      non-Normal = tap emits Right, long is a no-op ----
     if (keycode == MENU_TAP_RIGHT) {
         if (record->event.pressed) {
-            menu_pressed = true;
-            menu_held    = false;
-            menu_timer   = timer_read();
+            menu_pressed   = true;
+            menu_held      = false;
+            menu_timer     = timer_read();
+            menu_ms        = mouse_ctx;
+            menu_tap_arrow = !mouse_ctx;
+            if (menu_ms) register_code(MS_RGHT);
         } else {
             menu_pressed = false;
+            if (menu_ms) {
+                unregister_code(MS_RGHT);
+                menu_ms = false;
+            }
             if (menu_held) {
-                menu_held = false; // right click already fired in matrix_scan_user
-            } else {
+                menu_held = false; // Enter already fired in matrix_scan_user
+            } else if (menu_tap_arrow) {
                 tap_code(KC_RGHT);
             }
+            menu_tap_arrow = false;
         }
         return false;
+    }
+
+    // ---- Normal-mode mouse movement: the bottom-row direction keys.
+    //      While held they drive the pointer (mousekey acceleration); the
+    //      tap-hold mod/layer of these keys is overridden in this context. ----
+    if (mouse_ctx) {
+        uint8_t ms = 0;
+        if (keycode == LT(2, KC_LEFT) || keycode == LT(3, KC_LEFT)) {
+            ms = MS_LEFT;
+        } else if (keycode == MT(MOD_RCTL, KC_DOWN)) {
+            ms = MS_DOWN;
+        } else if (keycode == MT(MOD_RSFT, KC_UP)) {
+            ms = MS_UP;
+        }
+        if (ms) {
+            if (record->event.pressed) {
+                register_code(ms);
+            } else {
+                unregister_code(ms);
+            }
+            return false;
+        }
     }
 
     // ---- Space mouse leak-guard: release outside the mouse context while
@@ -390,11 +426,15 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 void matrix_scan_user(void) {
-    // Menu long press: one right click, only inside the Normal mouse context.
-    if (menu_pressed && !menu_held && timer_elapsed(menu_timer) >= TAPPING_TERM) {
+    // Menu long press: stop moving and send Enter (Normal mouse context).
+    if (menu_pressed && !menu_held && timer_elapsed(menu_timer) >= MENU_HOLD_TIME) {
         menu_held = true;
+        if (menu_ms) {
+            unregister_code(MS_RGHT);
+            menu_ms = false;
+        }
         if (vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && !replace_active && get_mods() == 0) {
-            tap_code(MS_BTN2);
+            tap_code(KC_ENTER);
         }
     }
 
