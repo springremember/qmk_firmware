@@ -706,14 +706,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
-    // Insert mode digit keys: plain digits pass straight through (no more
-    // long-press F-row). Right Ctrl + digit emits F1..F10; Left Ctrl is left alone.
-    if (vmode == INSERT_MODE && keycode >= KC_1 && keycode <= KC_0 && (mods & MOD_BIT(KC_RCTL)) && record->event.pressed) {
-        uint8_t num = (keycode == KC_0) ? 10 : (keycode - KC_1 + 1);
-        tap_code(KC_F1 + num - 1);
-        return false;
-    }
-
     return true;
 }
 
