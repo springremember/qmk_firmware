@@ -120,7 +120,7 @@ void keyboard_post_init_user(void) {
     insert_mode();
 
     rgb_matrix_mode_noeeprom(RGB_MATRIX_CYCLE_OUT_IN_DUAL);
-    rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 66); // 33% of 200
+    rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 106); // 53% of 200
     rgb_matrix_set_speed_noeeprom(28);                                           // ~11% of 255
 }
 
