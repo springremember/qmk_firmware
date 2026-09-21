@@ -18,7 +18,6 @@ void    vim_glue_init(void);
 void    vim_glue_task(uint32_t now_ms);
 bool    vim_glue_kbd(uint16_t keycode);
 bool    vim_glue_key_up(uint16_t keycode);
-void    vim_shadow_mod(uint16_t keycode, bool pressed);
 
 // Vendor globals defined in qk61.c, used to yield the RGB indicator layer.
 extern bool Key_Fn_Status;
@@ -138,11 +137,9 @@ static bool     mouse_held        = false;
 static bool     mouse_lbtn_held   = false;
 static uint16_t mouse_lbtn_timer  = 0;
 
-/* ===== Shift+Esc release-swallow ===== */
-static uint16_t shift_combo_kc = KC_NO;
-
 /* ===== Fn+Esc: press swallowed under Fn, release swallowed too ===== */
 static bool fn_esc_swallow = false;
+static bool fn_esc_press_swallowed = false; /* press was swallowed by Fn+Esc */
 
 /* ===== Fn + Esc held >= 3s = reset EEPROM + reboot ===== */
 #define RESET_HOLD_MS 3000
@@ -205,6 +202,26 @@ static const uint8_t flash_led[] = {
 #define FLASH_LED_COUNT (sizeof(flash_led) / sizeof(flash_led[0]))
 static uint16_t flash_time[FLASH_LED_COUNT] = {0};
 
+/* ===== keymap-layer press-swallow list =====
+ * Keys whose press this layer consumes (Shift+Esc, Normal-mode shortcuts)
+ * must have their release consumed too (design §4.10 / readme §9). */
+#define SWALLOW_MAX 8
+static uint16_t swallow_kc[SWALLOW_MAX];
+static int      swallow_n = 0;
+
+static void swallow_add(uint16_t kc) {
+    if (swallow_n < SWALLOW_MAX) swallow_kc[swallow_n++] = kc;
+}
+static bool swallow_take(uint16_t kc) {
+    for (int i = 0; i < swallow_n; i++) {
+        if (swallow_kc[i] == kc) {
+            swallow_kc[i] = swallow_kc[--swallow_n];
+            return true;
+        }
+    }
+    return false;
+}
+
 /* ===== Shift + Esc combos (only Insert) ===== */
 static bool pr_shift_combos(uint16_t keycode, keyrecord_t *record, uint8_t mods) {
     if (kv_get_mode() != KV_MODE_INSERT) return false;
@@ -215,20 +232,18 @@ static bool pr_shift_combos(uint16_t keycode, keyrecord_t *record, uint8_t mods)
             clear_mods();
             tap_code16(LSFT(KC_GRV)); // ~
             set_mods(saved_mods);
-            shift_combo_kc = keycode;
+            swallow_add(keycode);
             return true;
         }
-        if ((mods & MOD_BIT_RSHIFT) && (keycode == KC_ESC)) {
+        if ((mods & MOD_BIT_RSHIFT) && (keycode == KC_ESC) &&
+            !(mods & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
             uint8_t saved_mods = get_mods();
             clear_mods();
             tap_code16(KC_GRV); // Right Shift + Esc = `
             set_mods(saved_mods);
-            shift_combo_kc = keycode;
+            swallow_add(keycode);
             return true;
         }
-    } else if (shift_combo_kc == keycode) {
-        shift_combo_kc = KC_NO;
-        return true;
     }
     return false;
 }
@@ -278,7 +293,7 @@ static bool pr_caps(uint16_t keycode, keyrecord_t *record, bool vim_on) {
     kv_mode_t m = kv_get_mode();
     if (record->event.pressed) {
         caps_was_insert  = (m != KV_MODE_NORMAL);
-        caps_press_timer = timer_read();
+        caps_press_timer = timer_read() ? timer_read() : 1;
         kv_set_mode(KV_MODE_NORMAL);
     } else {
         bool held = caps_press_timer && timer_elapsed(caps_press_timer) >= CAPS_HOLD_TIME;
@@ -298,13 +313,22 @@ static void mouse_enter(void) {
     mouse_mode_active = true;
     kv_set_mode(KV_MODE_MOUSE);
 }
+/* Remember the keycode actually registered per mouse key, so the release
+ * unregisters exactly that one even if Shift changed mid-hold (P0-2). */
+static uint16_t mouse_j_reg = KC_NO;
+static uint16_t mouse_k_reg = KC_NO;
+
 static void mouse_exit(void) {
     mouse_mode_active = false;
     unregister_code(MS_LEFT);
     unregister_code(MS_DOWN);
     unregister_code(MS_UP);
     unregister_code(MS_RGHT);
+    unregister_code(MS_WHLU);
+    unregister_code(MS_WHLD);
     unregister_code(MS_BTN2);
+    mouse_j_reg = KC_NO;
+    mouse_k_reg = KC_NO;
     if (mouse_lbtn_held) {
         unregister_code(MS_BTN1);
         mouse_lbtn_held = false;
@@ -317,7 +341,7 @@ static bool pr_mouse_mode(uint16_t keycode, keyrecord_t *record) {
     // VIM_MOUSE: tap toggles mouse mode, hold = RAlt/RGUI.
     if (keycode == VIM_MOUSE) {
         if (record->event.pressed) {
-            mouse_press_timer = timer_read();
+            mouse_press_timer = timer_read() ? timer_read() : 1;
             mouse_held        = false;
         } else {
             if (mouse_held) {
@@ -337,6 +361,8 @@ static bool pr_mouse_mode(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
+/* Remember the keycode actually registered per mouse key, so the release
+ * unregisters exactly that one even if Shift changed mid-hold (P0-2). */
 static bool pr_mouse_keys(uint16_t keycode, keyrecord_t *record) {
     if (!mouse_mode_active) return false;
     // QMK reports the base keycode plus get_mods(); handle Shift here.
@@ -345,14 +371,16 @@ static bool pr_mouse_keys(uint16_t keycode, keyrecord_t *record) {
         switch (keycode) {
             case KC_H: register_code(MS_LEFT);  return true;
             case KC_J:
-                if (shift) register_code(MS_WHLD); else register_code(MS_DOWN);
+                mouse_j_reg = shift ? MS_WHLD : MS_DOWN;
+                register_code(mouse_j_reg);
                 return true;
             case KC_K:
-                if (shift) register_code(MS_WHLU); else register_code(MS_UP);
+                mouse_k_reg = shift ? MS_WHLU : MS_UP;
+                register_code(mouse_k_reg);
                 return true;
             case KC_L: register_code(MS_RGHT);  return true;
             case KC_SPC:
-                mouse_lbtn_timer = timer_read();
+                mouse_lbtn_timer = timer_read() ? timer_read() : 1;
                 return true;
             case KC_ENT: register_code(MS_BTN2); return true;
             default: break;
@@ -361,10 +389,12 @@ static bool pr_mouse_keys(uint16_t keycode, keyrecord_t *record) {
         switch (keycode) {
             case KC_H: unregister_code(MS_LEFT);  return true;
             case KC_J:
-                if (shift) unregister_code(MS_WHLD); else unregister_code(MS_DOWN);
+                if (mouse_j_reg != KC_NO) unregister_code(mouse_j_reg);
+                mouse_j_reg = KC_NO;
                 return true;
             case KC_K:
-                if (shift) unregister_code(MS_WHLU); else unregister_code(MS_UP);
+                if (mouse_k_reg != KC_NO) unregister_code(mouse_k_reg);
+                mouse_k_reg = KC_NO;
                 return true;
             case KC_L: unregister_code(MS_RGHT);  return true;
             case KC_SPC:
@@ -386,8 +416,6 @@ static bool pr_mouse_keys(uint16_t keycode, keyrecord_t *record) {
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     const uint8_t mods   = get_mods();
     const bool    vim_on = kv_vim_enabled();
-
-    vim_shadow_mod(keycode, record->event.pressed);
 
     // ---- myfn 约定（在 vim / 鼠标处理之前拦截）----
     if (!process_record_myfn(keycode, record)) return false;
@@ -416,11 +444,12 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (record->event.key.row == 0 && record->event.key.col == 0) {
         if (record->event.pressed) {
             if (fn_layer_active()) {
-                fn_esc_swallow = true;
+                fn_esc_swallow        = true;
+                fn_esc_press_swallowed = true;
                 if (!reset_armed) {
                     reset_armed = true;
                     reset_fired = false;
-                    reset_timer = timer_read();
+                    reset_timer = timer_read() ? timer_read() : 1;
                 }
             }
         } else {
@@ -429,15 +458,21 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 fn_esc_swallow = false;
                 return false;
             }
+            // A press that was swallowed while Fn was held must have its
+            // release swallowed too, even if Fn was released first.
+            if (fn_esc_press_swallowed) {
+                fn_esc_press_swallowed = false;
+                return false;
+            }
         }
-        if (fn_layer_active()) return false;
     }
 
     // ---- Mouse-mode key handling ----
     if (pr_mouse_mode(keycode, record)) return false;
     if (pr_mouse_keys(keycode, record)) return false;
     // Any other key exits mouse mode and is re-identified (design §4.9).
-    if (mouse_mode_active) {
+    // Modifiers are excluded: Shift+J/K are wheel scrolls, not an exit.
+    if (mouse_mode_active && !IS_MODIFIER_KEYCODE(keycode)) {
         if (record->event.pressed) mouse_exit();
         // fall through: the key is handled by the engine/QMK below
     }
@@ -452,7 +487,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // ---- Keyboard-layer Normal-mode shortcuts (design/readme §9) ----
     // QMK reports the base keycode + get_mods(); match on base + held mods,
     // strip the physical modifiers, then send the plain key (design §2.1).
-    if (kv_get_mode() == KV_MODE_NORMAL && record->event.pressed) {
+    if (vim_on && kv_get_mode() == KV_MODE_NORMAL && record->event.pressed) {
         bool is_bspc = (keycode == KC_BSPC);
         bool is_spc  = (keycode == KC_SPC);
         bool is_mins = (keycode == KC_MINS);
@@ -472,6 +507,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             else if (is_cf)   tap_code(KC_PGDN);
             else if (is_cb)   tap_code(KC_PGUP);
             set_mods(saved);
+            swallow_add(keycode); // consume the matching release too (§9)
             return false;
         }
     }
@@ -482,6 +518,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (record->event.pressed) {
         return !vim_glue_kbd(keycode);
     }
+    if (swallow_take(keycode)) return false; // keymap-layer press was swallowed
     return !vim_glue_key_up(keycode);
 }
 

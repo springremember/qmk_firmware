@@ -14,38 +14,6 @@
 #include "qmk-vim-fn/engine/include/kv.h"
 
 // --------------------------------------------------------------------------
-// Physical modifier shadow.  The myfn layer swallows undefined keys (incl.
-// modifiers), so get_mods() is unreliable for combos that must be detected
-// before the swallow.  (QK61 has no vendor Fn bootloader combo, so this is
-// currently only a safety net for future keyboards.)
-// --------------------------------------------------------------------------
-static uint8_t phys_mods = 0;
-
-static uint8_t mod_bit_of(uint16_t keycode) {
-    switch (keycode) {
-        case KC_LCTL: return MOD_BIT(KC_LCTL);
-        case KC_LSFT: return MOD_BIT(KC_LSFT);
-        case KC_LALT: return MOD_BIT(KC_LALT);
-        case KC_LGUI: return MOD_BIT(KC_LGUI);
-        case KC_RCTL: return MOD_BIT(KC_RCTL);
-        case KC_RSFT: return MOD_BIT(KC_RSFT);
-        case KC_RALT: return MOD_BIT(KC_RALT);
-        case KC_RGUI: return MOD_BIT(KC_RGUI);
-        default: return 0;
-    }
-}
-
-void vim_shadow_mod(uint16_t keycode, bool pressed) {
-    uint8_t bit = mod_bit_of(keycode);
-    if (!bit) return;
-    if (pressed) {
-        phys_mods |= bit;
-    } else {
-        phys_mods &= (uint8_t)~bit;
-    }
-}
-
-// --------------------------------------------------------------------------
 // Held-motion exception (design.md §4.10).
 // --------------------------------------------------------------------------
 static const uint16_t s_motion_kc[4] = {KC_H, KC_J, KC_K, KC_L};
@@ -165,17 +133,19 @@ void vim_glue_task(uint32_t now_ms) {
 // emit); false if the caller should pass the key through to QMK.
 //
 // QMK reports the *base* keycode plus the held modifiers, while the engine
-// uses QMK-style shifted keycodes (e.g. KV_C_G for 'G').  So wrap Shift in
-// when only Shift is held.
+// uses QMK-style shifted keycodes (e.g. KV_C_G for 'G').  Only a pure Shift
+// is folded in; any Ctrl/Alt/GUI combo is left to QMK (Ctrl+F/B and the other
+// keyboard-layer shortcuts are handled before this is called).
 bool vim_glue_kbd(uint16_t keycode) {
     if (!kv_vim_enabled()) return false;
+
+    uint8_t m = get_mods();
+    if (m & (MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_GUI)) return false;
+
     vim_glue_key_down(keycode);
 
     kv_keycode_t kc = (kv_keycode_t)keycode;
-    uint8_t      m  = get_mods();
-    if ((m & MOD_MASK_SHIFT) && !(m & (MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_GUI))) {
-        kc |= KV_MOD_LSFT;
-    }
+    if (m & MOD_MASK_SHIFT) kc |= KV_MOD_LSFT;
     bool consumed = (kv_kbd(kc) == KV_CONSUMED);
     if (consumed) consumed_add(keycode);
     return consumed;
