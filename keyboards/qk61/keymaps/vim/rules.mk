@@ -1,8 +1,8 @@
-# qmk-vim engine - note that the order is important here
-SRC += qmk-vim/src/mac_mode.c
-SRC += qmk-vim/src/process_func.c
-SRC += qmk-vim/src/numbered_actions.c
-SRC += qmk-vim/src/motions.c
-SRC += qmk-vim/src/actions.c
-SRC += qmk-vim/src/modes.c
-SRC += qmk-vim/src/vim.c
+# qmk-vim-fn engine (QMK-agnostic core) + QMK glue
+SRC += qmk-vim-fn/engine/src/queue.c
+SRC += qmk-vim-fn/engine/src/classify.c
+SRC += qmk-vim-fn/engine/src/ctx.c
+SRC += qmk-vim-fn/engine/src/emit.c
+SRC += qmk-vim-fn/engine/src/command.c
+SRC += qmk-vim-fn/engine/src/engine.c
+SRC += vim_glue.c
