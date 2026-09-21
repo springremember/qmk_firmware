@@ -158,7 +158,7 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
 /* ===== myfn 约定（qmk-vim-fn/fn/readme.md）=====
  * 未声明键（含修饰键）一律吞键；Fn+Space 电量、Fn+T 空跑在此处理；
- * F 区/音量由 _FN 层键码直接输出（放行）。修饰键放行给 keymap 其它分支。 */
+ * F 区/音量由 _FN 层键码直接输出（放行）。 */
 static bool fn_batt_held = false;
 
 static bool is_defined_myfn_key(uint16_t kc) {
@@ -451,6 +451,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                     reset_fired = false;
                     reset_timer = timer_read() ? timer_read() : 1;
                 }
+                return false; // Fn+Esc: swallow the press (no real Esc)
             }
         } else {
             reset_armed = false;
@@ -488,11 +489,12 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // QMK reports the base keycode + get_mods(); match on base + held mods,
     // strip the physical modifiers, then send the plain key (design §2.1).
     if (vim_on && kv_get_mode() == KV_MODE_NORMAL && record->event.pressed) {
-        bool is_bspc = (keycode == KC_BSPC);
-        bool is_spc  = (keycode == KC_SPC);
-        bool is_mins = (keycode == KC_MINS);
-        bool is_eql  = (keycode == KC_EQL)  && (mods & MOD_MASK_SHIFT);
-        bool is_slsh = (keycode == KC_SLSH);
+        const bool no_cag = !(mods & (MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_GUI));
+        bool is_bspc = (keycode == KC_BSPC) && no_cag;
+        bool is_spc  = (keycode == KC_SPC)  && no_cag;
+        bool is_mins = (keycode == KC_MINS) && no_cag && !(mods & MOD_MASK_SHIFT);
+        bool is_eql  = (keycode == KC_EQL)  && (mods & MOD_MASK_SHIFT) && !(mods & (MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_GUI));
+        bool is_slsh = (keycode == KC_SLSH) && no_cag && !(mods & MOD_MASK_SHIFT);
         bool is_cf   = (keycode == KC_F)    && (mods & MOD_MASK_CTRL);
         bool is_cb   = (keycode == KC_B)    && (mods & MOD_MASK_CTRL);
         if (is_bspc || is_spc || is_mins || is_eql || is_slsh || is_cf || is_cb) {

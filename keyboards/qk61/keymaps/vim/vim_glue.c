@@ -77,19 +77,9 @@ bool vim_glue_key_up(uint16_t keycode) {
 // We must NOT write back the modifier report (design §4.10 / E2): register the
 // needed modifier as a real key around the tap instead of set_mods().
 // --------------------------------------------------------------------------
-static uint8_t mods_to_qmk(uint8_t m) {
-    uint8_t out = 0;
-    if (m & (KV_MOD_LCTL >> 8)) out |= MOD_BIT(KC_LCTL);
-    if (m & (KV_MOD_LSFT >> 8)) out |= MOD_BIT(KC_LSFT);
-    if (m & (KV_MOD_LALT >> 8)) out |= MOD_BIT(KC_LALT);
-    if (m & (KV_MOD_LGUI >> 8)) out |= MOD_BIT(KC_LGUI);
-    if (m & (KV_MOD_RCTL >> 8)) out |= MOD_BIT(KC_RCTL);
-    if (m & (KV_MOD_RSFT >> 8)) out |= MOD_BIT(KC_RSFT);
-    if (m & (KV_MOD_RALT >> 8)) out |= MOD_BIT(KC_RALT);
-    if (m & (KV_MOD_RGUI >> 8)) out |= MOD_BIT(KC_RGUI);
-    return out;
-}
-
+// The engine's modifier bits mirror QMK's packed mod byte exactly
+// (KV_MOD_LCTL=0x0100 -> 0x01 == MOD_BIT(KC_LCTL)), so the 5-bit value can be
+// handed straight to register_mods()/unregister_mods().
 static void vim_emit(kv_keycode_t kc) {
     uint16_t basic = (uint16_t)(kc & 0x00FF);
     uint8_t  mods  = (uint8_t)((kc >> 8) & 0x1F);
@@ -105,17 +95,10 @@ static void vim_emit(kv_keycode_t kc) {
         return;
     }
 
-    uint8_t qmk_mods = mods_to_qmk(mods);
-    if (qmk_mods) {
-        for (uint8_t bit = 0x01; bit; bit <<= 1)
-            if (qmk_mods & bit) register_mods(bit);
-    }
+    if (mods) register_mods(mods);
     register_code(basic);
     unregister_code(basic);
-    if (qmk_mods) {
-        for (uint8_t bit = 0x01; bit; bit <<= 1)
-            if (qmk_mods & bit) unregister_mods(bit);
-    }
+    if (mods) unregister_mods(mods);
 }
 
 void vim_glue_init(void) {
