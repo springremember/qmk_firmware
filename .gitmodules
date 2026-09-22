@@ -1,3 +1,3 @@
-[submodule "keyboards/leku/nut65/keymaps/vim/qmk-vim"]
-	path = keyboards/leku/nut65/keymaps/vim/qmk-vim
-	url = git@github.com:springremember/qmk-vim.git
+[submodule "keyboards/leku/nut65/keymaps/vim/qmk-vim-fn"]
+	path = keyboards/leku/nut65/keymaps/vim/qmk-vim-fn
+	url = git@github.com:springremember/qmk-vim-fn.git

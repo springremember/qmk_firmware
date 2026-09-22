@@ -1,10 +1,11 @@
 ENCODER_MAP_ENABLE = yes
 VIA_ENABLE = yes
 
-SRC += qmk-vim/src/mac_mode.c
-SRC += qmk-vim/src/process_func.c
-SRC += qmk-vim/src/numbered_actions.c
-SRC += qmk-vim/src/motions.c
-SRC += qmk-vim/src/actions.c
-SRC += qmk-vim/src/modes.c
-SRC += qmk-vim/src/vim.c
+# qmk-vim-fn engine (QMK-agnostic core) + shared QMK adapter/keymap layer
+SRC += qmk-vim-fn/engine/src/classify.c
+SRC += qmk-vim-fn/engine/src/ctx.c
+SRC += qmk-vim-fn/engine/src/emit.c
+SRC += qmk-vim-fn/engine/src/command.c
+SRC += qmk-vim-fn/engine/src/engine.c
+SRC += qmk-vim-fn/qmk/vim_glue.c
+SRC += qmk-vim-fn/qmk/vim_keymap_common.c
