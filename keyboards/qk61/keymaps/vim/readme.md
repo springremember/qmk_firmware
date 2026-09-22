@@ -10,6 +10,7 @@
 - myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
+> **版本 V2.1（当前）**：引擎迁移到 `qmk-vim-fn`（子模块，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。修复 V2.0 的「有线 USB 无法枚举」问题，见 **第十三节**。
 
 ## 一、键位与层
 
@@ -53,7 +54,7 @@ Base 层 Esc 由 `QK_GESC` 改为 **`KC_ESC`**（供 vim 拦截）。
 
 - 判定阈值 = QMK `TAPPING_TERM`（默认 **200ms**）。
 - **运行时直接用编译键位**：`keymap.c` 用强符号覆盖 `keymap_key_to_keycode()` → `keycode_at_keymap_location_raw()`，忽略 EEPROM 里的 VIA 动态键位，直接从固件 `keymaps` 取键。
-- 每次刷入**新编译**固件后首次开机，用完整 `QMK_BUILDDATE` 哈希与 EEPROM 记录比较，不同则 `dynamic_keymap_reset()` 重灌编译键位（VIA magic 只用日期，同日多次编译不触发）。
+- **不再在启动时重灌动态键位**：V2.0 曾在 `keyboard_post_init_user()` 用 `QMK_BUILDDATE` 哈希判断并调用 `dynamic_keymap_reset()`，结果首次刷入后**有线 USB 无法枚举**（设备管理器显示“未知设备”，按键无反应；蓝牙/2.4G 正常）。原因是该调用把约 960 字节逐字节写入 QK61 的模拟 flash（`common/user_eeprom.c`，每次 program 都 `__disable_irq()`），正好压在 USB 枚举窗口上。由于 `keymap_key_to_keycode()` 已是强覆盖、EEPROM 动态键位根本不会被读取，这段重灌是多余的，V2.1 起**彻底移除**（详见第十三节）。
 - `DYNAMIC_KEYMAP_LAYER_COUNT = 5`（第 5 层必须同步调大，否则触发 QMK 静态断言）。
 - **`Fn` + `Esc` 长按 3 秒 = 重置 EEPROM**（`eeconfig_init()`）并重启；短按 `Fn`+`Esc` 不输出任何键（先松 Fn 也不会漏出真 Esc）。
 - **休眠/唤醒/重连**：保留 `DISABLE_CUSTOM_SLEEP`（厂商深睡会挂死本 MCU），改由 `qk61.c` 的 **C1 RF 状态机**管理：无线空闲 5 分钟 → 拉低 SDB 断电 RF；任意按键 / 插入 USB → `Init_Gpio_Infomation()` 恢复 SDB → 重握手 → 重发当前模式。另含**插线自动切 USB 并重新枚举**。**无 Fn+Enter 手动睡眠**。
@@ -219,3 +220,13 @@ make qk61:vim:flash
 - **保留** Insert 模式「右 `Ctrl`+数字 = F1..F10」（QK61 有右 Ctrl）。
 - 原厂 Fn 层（layer 2/3）逐键保留；原厂刷机 = 按住 `Esc` 插线 / PCB Reset（无 Fn 组合）。
 - 与 NUT65 的专属差异（Enter 长按右键 / Ctrl+Alt+Del / 亮度）**不互相**同步。
+
+## 十三、问题记录（V2.0 → V2.1）
+
+### P1 有线 USB 无法枚举（“未知设备”）
+- **现象**：刷入 V2.0 后，**有线 USB** 模式亮灯但主机识别为“未知设备”、按键无反应；**蓝牙 / 2.4G 完全正常**；原厂固件正常；重刷 V1.0 立即恢复。
+- **根因**：V2.0 的 `keyboard_post_init_user()` 在 `QMK_BUILDDATE` 哈希与 EEPROM 记录不一致时调用 `dynamic_keymap_reset()`（`5 层 × 6 行 × 16 列 × 2 字节 ≈ 960 字节`）。QK61 用 `EEPROM_DRIVER = custom`（`common/user_eeprom.c` 的模拟 flash），`eeprom_write_block()` 对每个变化字节调用 `ee_write_variable()` 做一次 flash program 并 `__disable_irq()`，必要时还会整页（8KB）搬移。该过程发生在 `protocol_pre_init()`（USB 已 connect、枚举进行中）之后、`protocol_post_init()` 之前，长时间关中断使 USB 控制传输超时，枚举失败。
+- **为何与引擎无关**：引擎/共享层代码在三种模式下运行路径一致；只有 USB 走枚举，故只有 USB 坏。
+- **修复（V2.1）**：删除该 build-id 判断与 `dynamic_keymap_reset()`（及随之无用的 `version.h` / `dynamic_keymap.h`）。`keymap_key_to_keycode()` 强覆盖已保证运行时始终用编译键位，EEPROM 动态键位不会被读，无需重灌。
+- **验证**：诊断固件 D1（仅删该段）刷入后 USB 立即恢复 → 定位确认；正式 V2.1 归档 `output/qk61_vim_v2.1.{bin,hex}`。
+- **教训**：启动期（尤其枚举窗口内）避免大批量 EEPROM/flash 写；需要刷新动态键位时应延后到枚举完成之后，或依赖 VIA 原生机制。

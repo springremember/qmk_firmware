@@ -10,8 +10,6 @@
 // Design authority: qmk-vim-fn/vim/design.md §4.9/§4.10/§4.12.
 
 #include QMK_KEYBOARD_H
-#include "version.h"              // QMK_BUILDDATE (full build timestamp)
-#include "dynamic_keymap.h"       // dynamic_keymap_reset()
 #include "keymap_introspection.h" // keycode_at_keymap_location_raw()
 #include "common/rdmctmzt_common.h"
 #include "common/user_battery.h"
@@ -92,27 +90,14 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 // clang-format on
 
-/* ===== Force the compiled keymap into the VIA dynamic keymap once per flashed
- * firmware build. ===== */
-static uint32_t fw_build_id(void) {
-    uint32_t h = 2166136261u;
-    for (const char *s = QMK_BUILDDATE; *s; s++) {
-        h ^= (uint8_t)*s;
-        h *= 16777619u;
-    }
-    return h;
-}
-
 /* ===== Vim is always on: start in typing (Insert) mode ===== */
 void keyboard_post_init_user(void) {
-    uint32_t stored_id = 0;
-    eeconfig_read_user_datablock(&stored_id, 0, sizeof(stored_id));
-    if (stored_id != fw_build_id()) {
-        dynamic_keymap_reset(); // write the compiled keymap into EEPROM
-        uint32_t id = fw_build_id();
-        eeconfig_update_user_datablock(&id, 0, sizeof(id));
-    }
-
+    // NOTE: no dynamic_keymap_reset() here.  keymap_key_to_keycode() below is a
+    // strong override that resolves every key from the compiled keymaps, so the
+    // EEPROM dynamic keymap is never read anyway.  The old build-id hash +
+    // dynamic_keymap_reset() rewrote ~960 bytes through the QK61 emulated-flash
+    // driver (per-byte program with interrupts disabled) during the USB
+    // enumeration window, which wedged enumeration ("unknown device").
     vim_glue_init();
 
     rgb_matrix_mode_noeeprom(RGB_MATRIX_CYCLE_OUT_IN_DUAL);
