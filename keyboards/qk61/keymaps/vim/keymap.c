@@ -139,20 +139,24 @@ static bool qk61_myfn_declared(uint16_t keycode) {
     return false;
 }
 
-/* Fn+Space 电量提示；Fn+T 空跑（无需动作，骨架吞键）。 */
+/* Fn+Space 电量提示（消费，不打空格）；Fn+T 空跑（消费）；其余已声明键放行。 */
 static bool fn_batt_held = false;
 
-static void qk61_myfn(uint16_t keycode, bool pressed) {
-    if (keycode != KC_SPC) return;
-    if (pressed) {
-        fn_batt_held           = true;
-        User_Key_Batt_Num_Show = true;
-        User_Key_Batt_Count    = 0;
-    } else if (fn_batt_held) {
-        fn_batt_held           = false;
-        User_Key_Batt_Num_Show = false;
-        User_Key_Batt_Count    = 0;
+static bool qk61_myfn(uint16_t keycode, bool pressed) {
+    if (keycode == KC_SPC) {
+        if (pressed) {
+            fn_batt_held           = true;
+            User_Key_Batt_Num_Show = true;
+            User_Key_Batt_Count    = 0;
+        } else if (fn_batt_held) {
+            fn_batt_held           = false;
+            User_Key_Batt_Num_Show = false;
+            User_Key_Batt_Count    = 0;
+        }
+        return true; // consume
     }
+    if (keycode == KC_T) return true; // Fn+T 空跑：吞键
+    return false;                     // F 区/音量/Caps/Esc 放行
 }
 
 /* ===== 按键短暂亮灯 ===== */
