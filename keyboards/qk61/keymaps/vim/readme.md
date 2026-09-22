@@ -149,12 +149,12 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 | 范围 | 效果 |
 | :--- | :--- |
 | 全局（除下述特定灯、以及 qk61.c 指示占用的灯） | `cycle_out_in_dual`，亮度 **53%**（106/200），速度 **11%**（≈28/255） |
-| **按键短亮集合** | 26 字母 + `Backspace`(13) `Tab`(14) `Enter`(40) `LShift`(41) `RShift`(52) `LCtrl`(53) `LAlt`(55) `Space`(56) `RAlt/RGUI`(58) `RCtrl`(59) `Menu`(60)：按下跟随全局色相短暂亮灯（约 200ms），平时熄灭 |
-| `Win`(54) | **常亮**，跟随全局色相 |
-| `Esc`(0) | 显示当前 vim 模式色，与 logo 同步 |
+| **按键短亮集合** | 26 字母 + `Backspace`(13) `Tab`(14) `Enter`(40) `LShift`(41) `RShift`(52) `LCtrl`(53) `LAlt`(55) `Space`(56) `Menu`(59) `RCtrl`(60)：按下跟随全局色相短暂亮灯（约 200ms），平时熄灭 |
+| `Fn`(58) | **常亮**，跟随全局色相（底排定位灯） |
+| `Esc`(0) | 显示当前 vim 模式色，亮度 **66%**（132/200） |
 | logo 61–63 | 颜色 = 模式色，**亮灯个数 = 电量** |
 
-**模式色**：Vim 关闭 = 红；Normal = 蓝；Insert = 绿；Visual / Visual Line = 紫；替换（R）= 橙。
+**模式色**：Vim 关闭 = 红；Normal = 蓝；Insert = 绿；Visual / Visual Line = 紫；鼠标模式 = 青。
 
 **logo 电量个数**：`lit = (User_Batt_BaiFen * 3 + 99) / 100`；USB 有线 / 充电时 `User_Batt_BaiFen = 100` → 3 颗全亮。
 

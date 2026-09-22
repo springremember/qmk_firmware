@@ -148,7 +148,7 @@ static bool qk61_myfn(uint16_t keycode, bool pressed) {
 #define FLASH_MS 200
 static const uint8_t flash_led[] = {
     29, 46, 44, 31, 17, 32, 33, 34, 22, 35, 36, 37, 48, 47, 23, 24, 15, 18, 30, 19, 21, 45, 16, 43, 20, 42,
-    13, 14, 40, 41, 52, 53, 55, 56, 58, 59, 60};
+    13, 14, 40, 41, 52, 53, 55, 56, 59, 60};
 #define FLASH_LED_COUNT (sizeof(flash_led) / sizeof(flash_led[0]))
 static uint16_t flash_time[FLASH_LED_COUNT] = {0};
 
@@ -249,6 +249,12 @@ void matrix_scan_user(void) {
     vim_keymap_common_task(timer_read());
 }
 
+/* ===== RGB indicator tuning ===== */
+// Esc（模式指示灯，LED 0）亮度 = 最大亮度的 66%（132/200）。
+#define VIM_ESC_BRIGHTNESS (RGB_MATRIX_MAXIMUM_BRIGHTNESS * 66 / 100)
+// 底排常亮定位灯：Fn 键（matrix_co[5][10]）。
+#define VIM_BOTTOM_LED 58
+
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     (void)led_min;
     (void)led_max;
@@ -264,7 +270,11 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         if (have) {
             uint8_t r = 0, g = 0, b = 0;
             vim_rgb_state_color(enabled, m, kv_pending(), mouse, &r, &g, &b);
-            rgb_matrix_set_color(vim_rgb_led_index(), r, g, b); // Esc key LED
+            // Esc key LED at 66% of the maximum brightness.
+            rgb_matrix_set_color(vim_rgb_led_index(),
+                                 (uint8_t)((uint16_t)r * VIM_ESC_BRIGHTNESS / 255),
+                                 (uint8_t)((uint16_t)g * VIM_ESC_BRIGHTNESS / 255),
+                                 (uint8_t)((uint16_t)b * VIM_ESC_BRIGHTNESS / 255));
             uint8_t bat = User_Batt_BaiFen;
             if (bat > 100) bat = 100;
             uint8_t lit = (uint8_t)(((uint16_t)bat * 3 + 99) / 100);
@@ -277,7 +287,7 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     if (!special) {
         hsv_t hsv = {.h = rgb_matrix_get_hue(), .s = 255, .v = RGB_MATRIX_MAXIMUM_BRIGHTNESS};
         rgb_t rgb = hsv_to_rgb(hsv);
-        rgb_matrix_set_color(54, rgb.r, rgb.g, rgb.b);
+        rgb_matrix_set_color(VIM_BOTTOM_LED, rgb.r, rgb.g, rgb.b); // Fn key always-on
     }
 
     if (!(Key_Fn_Status || Led_Rf_Pair_Flg || User_Power_Low || Test_Led)) {
