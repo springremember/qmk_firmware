@@ -166,6 +166,12 @@ static bool is_defined_myfn_key(uint16_t kc) {
     if (kc == KC_VOLD || kc == KC_VOLU) return true;
     if (kc == KC_SPC || kc == KC_CAPS || kc == KC_ESC) return true; // 各分支处理
     if (kc == KC_T) return true;                                     // 空跑（吞）
+    // Layer keys must be released so QMK can turn the layer off (MO(4)
+    // enters the Fn layer; swallowing its release would stick layer 4).
+    if (IS_QK_MOMENTARY(kc) || IS_QK_LAYER_TAP(kc) || IS_QK_LAYER_MOD(kc) ||
+        IS_QK_LAYER_TAP_TOGGLE(kc) || IS_QK_ONE_SHOT_LAYER(kc)) {
+        return true;
+    }
     return false;
 }
 
@@ -369,23 +375,27 @@ static bool pr_mouse_keys(uint16_t keycode, keyrecord_t *record) {
     const bool shift = (get_mods() & MOD_MASK_SHIFT) != 0;
     if (record->event.pressed) {
         switch (keycode) {
-            case KC_H: register_code(MS_LEFT);  return true;
+            case KC_H: register_code(MS_LEFT);  swallow_add(keycode); return true;
             case KC_J:
                 mouse_j_reg = shift ? MS_WHLD : MS_DOWN;
                 register_code(mouse_j_reg);
+                swallow_add(keycode);
                 return true;
             case KC_K:
                 mouse_k_reg = shift ? MS_WHLU : MS_UP;
                 register_code(mouse_k_reg);
+                swallow_add(keycode);
                 return true;
-            case KC_L: register_code(MS_RGHT);  return true;
+            case KC_L: register_code(MS_RGHT);  swallow_add(keycode); return true;
             case KC_SPC:
                 mouse_lbtn_timer = timer_read() ? timer_read() : 1;
+                swallow_add(keycode);
                 return true;
-            case KC_ENT: register_code(MS_BTN2); return true;
+            case KC_ENT: register_code(MS_BTN2); swallow_add(keycode); return true;
             default: break;
         }
     } else {
+        swallow_take(keycode); // release is consumed here while still in mouse mode
         switch (keycode) {
             case KC_H: unregister_code(MS_LEFT);  return true;
             case KC_J:
@@ -456,7 +466,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         } else {
             reset_armed = false;
             if (fn_esc_swallow) {
-                fn_esc_swallow = false;
+                fn_esc_swallow         = false;
+                fn_esc_press_swallowed = false;
                 return false;
             }
             // A press that was swallowed while Fn was held must have its
@@ -495,8 +506,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         bool is_mins = (keycode == KC_MINS) && no_cag && !(mods & MOD_MASK_SHIFT);
         bool is_eql  = (keycode == KC_EQL)  && (mods & MOD_MASK_SHIFT) && !(mods & (MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_GUI));
         bool is_slsh = (keycode == KC_SLSH) && no_cag && !(mods & MOD_MASK_SHIFT);
-        bool is_cf   = (keycode == KC_F)    && (mods & MOD_MASK_CTRL);
-        bool is_cb   = (keycode == KC_B)    && (mods & MOD_MASK_CTRL);
+        bool is_cf   = (keycode == KC_F)    && (mods & MOD_MASK_CTRL) && !(mods & (MOD_MASK_ALT | MOD_MASK_GUI));
+        bool is_cb   = (keycode == KC_B)    && (mods & MOD_MASK_CTRL) && !(mods & (MOD_MASK_ALT | MOD_MASK_GUI));
         if (is_bspc || is_spc || is_mins || is_eql || is_slsh || is_cf || is_cb) {
             kv_cancel(); // clear any half-typed command first
             uint8_t saved = get_mods();

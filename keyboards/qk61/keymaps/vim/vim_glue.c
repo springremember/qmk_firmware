@@ -77,12 +77,30 @@ bool vim_glue_key_up(uint16_t keycode) {
 // We must NOT write back the modifier report (design §4.10 / E2): register the
 // needed modifier as a real key around the tap instead of set_mods().
 // --------------------------------------------------------------------------
-// The engine's modifier bits mirror QMK's packed mod byte exactly
-// (KV_MOD_LCTL=0x0100 -> 0x01 == MOD_BIT(KC_LCTL)), so the 5-bit value can be
-// handed straight to register_mods()/unregister_mods().
+// Convert the engine's 5-bit packed modifier value (bits 8..12 of a QMK
+// mod-wrapped keycode: bit0=Ctrl bit1=Shift bit2=Alt bit3=GUI bit4=right)
+// into QMK's 8-bit HID modifier mask used by register_mods().
+static uint8_t packed_mods_to_hid(uint8_t m) {
+    uint8_t out = 0;
+    if (m & 0x01) out |= 0x01; // Ctrl  -> LCTL
+    if (m & 0x02) out |= 0x02; // Shift -> LSFT
+    if (m & 0x04) out |= 0x04; // Alt   -> LALT
+    if (m & 0x08) out |= 0x08; // GUI   -> LGUI
+    if (m & 0x10) {            // right-side flag
+        switch (m & 0x0F) {
+            case 0x01: out |= 0x10; break; // RCTL
+            case 0x02: out |= 0x20; break; // RSFT
+            case 0x04: out |= 0x40; break; // RALT
+            case 0x08: out |= 0x80; break; // RGUI
+            default: break;
+        }
+    }
+    return out;
+}
+
 static void vim_emit(kv_keycode_t kc) {
     uint16_t basic = (uint16_t)(kc & 0x00FF);
-    uint8_t  mods  = (uint8_t)((kc >> 8) & 0x1F);
+    uint8_t  mods  = packed_mods_to_hid((uint8_t)((kc >> 8) & 0x1F));
 
     // Held motion: a bare arrow whose physical motion key is still down is
     // registered (host auto-repeat) and released on the physical key-up.
