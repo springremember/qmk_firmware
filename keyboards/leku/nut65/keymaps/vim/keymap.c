@@ -357,12 +357,11 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     (void)led_max;
 
     // Six-state mode colour (design §4.9/§4.12): vim off red, mouse cyan,
-    // visual purple, normal blue (pending yellow), insert green.
+    // visual purple, normal blue (pending yellow), insert green.  Per readme
+    // §4 the mode colour is shown ONLY on the bottom strip below — the key area
+    // (incl. Caps) keeps the global effect, so no fixed LED is written here.
     uint8_t r = 0, g = 0, b = 0;
     vim_rgb_state_color(kv_vim_enabled(), kv_get_mode(), kv_pending(), kv_get_mode() == KV_MODE_MOUSE, &r, &g, &b);
-
-    // Indicator LED (Caps position) shows the current vim/mouse mode colour.
-    rgb_matrix_set_color(VIM_LED_INDEX, r, g, b);
 
     // Bottom strip = battery level (highest priority). Number of lit LEDs is
     // fixed by the charge level (both ends turned off toward the middle), the
