@@ -24,6 +24,7 @@ extern void hs_housekeeping_task_user(void);
 // already reach the keymap through rgb_record.h -> wls/wireless.h.  Only this
 // one needs an explicit declaration.
 extern bool hs_usb_active(void); // nut65.c
+extern void suspend_wakeup_init(void); // power combo wake path
 
 // module.h MD_STATE_CONNECTED: the wireless module actually has a live link.
 // The vendor wireless_send_mouse() answers a report sent while NOT connected
@@ -188,8 +189,9 @@ static bool mouse_link_ok(void) {
 }
 
 /* ===== USB / wireless auto switch (kept from V1.0) =====
- * The manual deep-sleep power combo (Ctrl+RightAlt+Insert) is gone; only the
- * automatic wired/wireless switching below remains. */
+ * This section is only the automatic wired/wireless switching; the manual
+ * deep-sleep power combo lives below (nut65_hook_pre + the pw_* state checked
+ * in housekeeping_task_user). */
 static uint8_t  pw_last_wls      = PW_DEVS_2G4; // remembered non-USB device
 static bool     pw_last_valid    = false;       // whether a real wireless devs seen
 static uint8_t  pw_frozen_wls    = PW_DEVS_2G4; // device right before switching to USB
@@ -241,6 +243,96 @@ static bool pr_boot_combo(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
+/* ===== Deep-sleep power combo: Ctrl + Right Alt + original Insert (row0 col14)
+ * held >= 3s with no USB = toggle deep sleep (readme §1 电源开关).  Ported back
+ * from V1.0 after the shared-layer migration dropped it.  While the combo is
+ * pending the involved keys are swallowed so nothing leaks; a latch blocks a
+ * re-engage until all three are released.  When USB is connected the combo is
+ * inactive, so Ctrl / RightAlt / Delete stay normal host keys. */
+#define PW_HOLD_MS 3000
+static bool     pw_off         = false;
+static bool     pw_ctrl        = false; // combo key 1: either Ctrl
+static bool     pw_ralt        = false; // combo key 2: Right Alt
+static bool     pw_ins         = false; // combo key 3: original Insert (row0 col14)
+static bool     pw_combo       = false;
+static bool     pw_combo_latch = false; // block re-engage until all released
+static uint32_t pw_combo_timer = 0;
+
+static void pw_enter_sleep(void) {
+    pw_off   = true;
+    pw_combo = false;
+    pw_ctrl  = false;
+    pw_ralt  = false;
+    pw_ins   = false;
+    clear_keyboard();
+    lpwr_set_state(1); // LPWR_PRESLEEP -> LPWR_STOP (deep sleep)
+}
+
+static void pw_boot_wireless(void) {
+    pw_off   = false;
+    pw_combo = false;
+    pw_ctrl  = false;
+    pw_ralt  = false;
+    pw_ins   = false;
+    // Stale frozen device from before the sleep must not force itself back
+    // after boot - manual BT/2.4G switching has to work again.
+    pw_frozen_valid  = false;
+    pw_recover_armed = false;
+    // Vendor wakeup_cb may skip RGB when its rgb_enable_bak got cleared by the
+    // intermediate presleep: force it back, then drive the vendor LPWR through
+    // WAKEUP to finish the normal wake path.
+    rgb_matrix_enable_noeeprom();
+    suspend_wakeup_init();
+    lpwr_set_state(3); // LPWR_WAKEUP
+    if (wireless_get_current_devs() == PW_DEVS_USB) {
+        wireless_devs_change(PW_DEVS_USB, pw_last_wls, false);
+    }
+}
+
+// Returns true when the event is consumed by the power combo / deep sleep.
+static bool power_combo_process(uint16_t keycode, keyrecord_t *record) {
+    // Key 3: original Insert position (row0 col14), now Delete on _BL.
+    if (record->event.key.row == 0 && record->event.key.col == 14) {
+        pw_ins = record->event.pressed;
+        if (pw_off) {
+            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
+            return true;
+        }
+        bool pw_ok = (wireless_get_current_devs() != PW_DEVS_USB); // combo only off-wire
+        if (pw_combo || (pw_ok && pw_ralt && pw_ctrl)) return true;
+        return false;
+    }
+    // Keys 2 and 1: Right Alt and either Ctrl.
+    if (keycode == KC_RALT || keycode == KC_LCTL || keycode == KC_RCTL) {
+        if (keycode == KC_RALT) {
+            pw_ralt = record->event.pressed;
+        } else {
+            pw_ctrl = record->event.pressed;
+        }
+        if (pw_off) {
+            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
+            return true;
+        }
+        if (pw_combo) return true; // swallow while the combo is pending
+        return false;
+    }
+    // Deep sleep: any key wakes the MCU momentarily, then it re-sleeps.
+    if (pw_off) {
+        if (record->event.pressed) pw_enter_sleep();
+        return true;
+    }
+    return false;
+}
+
+// Pipeline step 1 (cfg.hook_pre): Fn+RShift+Esc bootloader combo, then the
+// deep-sleep power combo.  Step 0 (the physical shadow) has already run, so
+// consuming a modifier here still leaves vim_glue_mods() accurate.
+static bool nut65_hook_pre(uint16_t keycode, keyrecord_t *record) {
+    if (pr_boot_combo(keycode, record)) return true;
+    if (power_combo_process(keycode, record)) return true;
+    return false;
+}
+
 /* ===== myfn (design: qmk-vim-fn/fn/readme.md) =====
  * The declared table lists every real key the _FN layer can produce.  Declared
  * keys are handed straight back to QMK by the shared skeleton (design §4.12
@@ -274,7 +366,7 @@ static const vim_cfg_t g_cfg = {
     .hold_ms          = 200,
     .shift_esc_enable = true,
     .led_index        = VIM_LED_INDEX,
-    .hook_pre         = pr_boot_combo,
+    .hook_pre         = nut65_hook_pre,
     .hook_post_myfn   = NULL,
     .myfn_declared    = nut65_myfn_declared,
     .myfn             = NULL, // all _FN keys are declared and passed through
@@ -292,6 +384,40 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 void housekeeping_task_user(void) {
+    // Deep-sleep power combo: Ctrl + RightAlt + original Insert held >= 3s
+    // (wireless only).  Engage clears the keyboard report so nothing leaks while
+    // holding; the latch blocks re-engage until all three are released again.
+    bool combo_now = (wireless_get_current_devs() != PW_DEVS_USB) && pw_ctrl && pw_ralt && pw_ins;
+    if (pw_combo_latch) {
+        if (!combo_now) pw_combo_latch = false; // all released -> re-arm
+    } else if (combo_now && !pw_combo) {
+        pw_combo       = true;
+        pw_combo_timer = timer_read32();
+        clear_keyboard();
+    } else if (pw_combo && !combo_now) {
+        pw_combo = false; // aborted before firing
+    }
+    if (pw_combo && timer_elapsed32(pw_combo_timer) >= PW_HOLD_MS) {
+        pw_combo       = false;
+        pw_combo_latch = true;
+        if (pw_off) {
+            pw_boot_wireless(); // deep-sleep -> boot wireless
+        } else {
+            pw_enter_sleep();   // running -> power off (deep sleep)
+        }
+    }
+
+    // USB plugged (or devs switched to USB) while powered off -> recover to
+    // normal wired operation (RGB was disabled by the vendor presleep, so force
+    // it back on here just like the combo boot does).
+    if (pw_off && (wireless_get_current_devs() == PW_DEVS_USB || !pw_no_cable())) {
+        pw_off = false;
+        pw_combo = false;
+        pw_ctrl = pw_ralt = pw_ins = false;
+        rgb_matrix_enable_noeeprom();
+        suspend_wakeup_init();
+    }
+
     // USB auto switch driven by the live USB host (plus cable pin fallback).
     // Plug  -> switch to wired USB.
     // Unplug -> return to the wireless device that was in use right before
@@ -300,7 +426,7 @@ void housekeeping_task_user(void) {
     // lives inside a short recovery window right after unplug - once the
     // frozen device is reached (or the user picks a device manually) manual
     // BT/2.4G switching is free again.
-    {
+    if (!pw_off) {
         bool usb_host   = hs_usb_active();
         bool line_cable = !pw_no_cable(); // pin fall back
         bool wired      = usb_host || line_cable;
