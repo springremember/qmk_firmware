@@ -48,6 +48,25 @@ uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {
     return KC_NO;
 }
 
+/* VIA stores a "valid" magic in EEPROM derived from QMK_BUILDDATE (year/month/
+ * day).  Whenever the firmware is built on a different day the magic no longer
+ * matches, and VIA's own via_init() — which runs after USB connect, while
+ * enumeration is in progress — calls eeconfig_init_via() -> dynamic_keymap_reset()
+ * (~960 bytes) + macro reset.  On the QK61 emulated-flash driver every changed
+ * byte is a flash program (and eeprom_write_block_user disables IRQs), so that
+ * rewrite blocks USB enumeration: the device lights up but is not recognised,
+ * while BT/2.4G keep working (the very failure class documented in readme §13).
+ *
+ * keymap_key_to_keycode() above is a strong override, so VIA's dynamic keymap is
+ * never read — resetting it is pointless.  Refresh only the magic (3 bytes) so
+ * via_init() skips the rewrite.  Keyboards that actually use the VIA dynamic
+ * keymap must NOT do this. */
+void via_init_kb(void) {
+    if (!via_eeprom_is_valid()) {
+        via_eeprom_set_valid(true);
+    }
+}
+
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_WIN_BASE] = LAYOUT_60_ansi(
