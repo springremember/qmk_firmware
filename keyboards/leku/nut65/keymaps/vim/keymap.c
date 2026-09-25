@@ -216,7 +216,7 @@ void wireless_devs_change_user(uint8_t old_devs, uint8_t new_devs, bool reset) {
 }
 
 static bool pw_no_cable(void) {
-    return !readPin(HS_BAT_CABLE_PIN) && !hs_usb_active();
+    return !readPin(HS_BAT_CABLE_PIN);
 }
 
 /* ===== Fn + Right Shift + Esc -> bootloader (DFU) =====
@@ -243,37 +243,23 @@ static bool pr_boot_combo(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
-/* ===== Deep-sleep power combo: Ctrl + Right Alt + original Insert (row0 col14)
- * held >= 3s with no USB = toggle deep sleep (readme §1 电源开关).  Ported back
- * from V1.0 after the shared-layer migration dropped it.  While the combo is
- * pending the involved keys are swallowed so nothing leaks; a latch blocks a
- * re-engage until all three are released.  When USB is connected the combo is
- * inactive, so Ctrl / RightAlt / Delete stay normal host keys. */
-#define PW_HOLD_MS 3000
-static bool     pw_off         = false;
-static bool     pw_ctrl        = false; // combo key 1: either Ctrl
-static bool     pw_ralt        = false; // combo key 2: Right Alt
-static bool     pw_ins         = false; // combo key 3: original Insert (row0 col14)
-static bool     pw_combo       = false;
-static bool     pw_combo_latch = false; // block re-engage until all released
-static uint32_t pw_combo_timer = 0;
+/* ===== Deep-sleep power: Fn+L (short press) sleeps; Fn + the layout
+ * top-right key ([0,14], _BL Delete / _MBL Insert) is the ONLY wake combo
+ * (fn/readme §1/§5).  Any other key only wakes the MCU momentarily and goes
+ * straight back to sleep, so an accidental key never powers the board back on.
+ * The manual V1.0 Ctrl+RightAlt+Delete combo was removed in v2.11. */
+static bool pw_off = false; // true while in (or entering) deep sleep
+static bool pw_wfn = false; // Fn ([4,11]) held as the wake-combo first key
 
 static void pw_enter_sleep(void) {
-    pw_off   = true;
-    pw_combo = false;
-    pw_ctrl  = false;
-    pw_ralt  = false;
-    pw_ins   = false;
+    pw_off = true;
     clear_keyboard();
     lpwr_set_state(1); // LPWR_PRESLEEP -> LPWR_STOP (deep sleep)
 }
 
 static void pw_boot_wireless(void) {
-    pw_off   = false;
-    pw_combo = false;
-    pw_ctrl  = false;
-    pw_ralt  = false;
-    pw_ins   = false;
+    pw_off = false;
+    pw_wfn = false;
     // Stale frozen device from before the sleep must not force itself back
     // after boot - manual BT/2.4G switching has to work again.
     pw_frozen_valid  = false;
@@ -289,59 +275,35 @@ static void pw_boot_wireless(void) {
     }
 }
 
-// Returns true when the event is consumed by the power combo / deep sleep.
+// Returns true when the event is consumed by the deep-sleep wake handling.
 static bool power_combo_process(uint16_t keycode, keyrecord_t *record) {
-    // Key 3: original Insert position (row0 col14), now Delete on _BL.
-    if (record->event.key.row == 0 && record->event.key.col == 14) {
-        pw_ins = record->event.pressed;
-        if (pw_off) {
-            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
+    (void)keycode;
+    if (!pw_off) return false;
+
+    bool is_fn  = (record->event.key.row == 4 && record->event.key.col == 11);
+    bool is_top = (record->event.key.row == 0 && record->event.key.col == 14);
+    if (record->event.pressed) {
+        if (is_fn) { // hold Fn: stay awake briefly so the combo can complete
+            pw_wfn = true;
             return true;
         }
-        bool pw_ok = pw_no_cable(); // combo only with no USB cable
-        if (pw_combo || (pw_ok && pw_ralt && pw_ctrl)) return true;
-        return false;
-    }
-    // Key 2: right Alt.  In this keymap the physical right-Alt position
-    // ([4,10]) resolves to the VIM_MOUSE trigger key (tap = mouse mode, hold =
-    // the Win/Mac modifier): the shared layer synthesises KC_RALT on hold via
-    // register_code(), which never passes through process_record_user - so a
-    // keycode-only KC_RALT match would never fire.  Match the matrix position
-    // (robust against the VIA dynamic keymap) plus the keycode.
-    if (keycode == VIM_MOUSE || keycode == KC_RALT ||
-        (record->event.key.row == 4 && record->event.key.col == 10)) {
-        pw_ralt = record->event.pressed;
-        if (pw_off) {
-            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
+        if (is_top && pw_wfn) { // Fn + top-right = the only real wake combo
+            pw_boot_wireless();
             return true;
         }
-        if (pw_combo) return true; // swallow while the combo is pending
-        // Combo forming (wireless + Ctrl already down): swallow the trigger so
-        // its synthetic RAlt / mouse mode cannot leak to the host.
-        bool ctrl_held = (vim_glue_mods() & (MOD_BIT(KC_LCTL) | MOD_BIT(KC_RCTL))) != 0;
-        if (record->event.pressed && pw_no_cable() && ctrl_held) return true;
-        return false;
-    }
-    // Key 1: either Ctrl.
-    if (keycode == KC_LCTL || keycode == KC_RCTL) {
-        pw_ctrl = record->event.pressed;
-        if (pw_off) {
-            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
-            return true;
-        }
-        if (pw_combo) return true; // swallow while the combo is pending
-        return false;
-    }
-    // Deep sleep: any key wakes the MCU momentarily, then it re-sleeps.
-    if (pw_off) {
-        if (record->event.pressed) pw_enter_sleep();
+        pw_enter_sleep(); // any other key: momentary wake, then back to sleep
         return true;
     }
-    return false;
+    // Releases: dropping Fn without the combo re-arms sleep.
+    if (is_fn && pw_wfn) {
+        pw_wfn = false;
+        pw_enter_sleep();
+    }
+    return true;
 }
 
 // Pipeline step 1 (cfg.hook_pre): Fn+RShift+Esc bootloader combo, then the
-// deep-sleep power combo.  Step 0 (the physical shadow) has already run, so
+// deep-sleep wake handling.  Step 0 (the physical shadow) has already run, so
 // consuming a modifier here still leaves vim_glue_mods() accurate.
 static bool nut65_hook_pre(uint16_t keycode, keyrecord_t *record) {
     if (pr_boot_combo(keycode, record)) return true;
@@ -351,13 +313,14 @@ static bool nut65_hook_pre(uint16_t keycode, keyrecord_t *record) {
 
 /* ===== myfn (design: qmk-vim-fn/fn/readme.md) =====
  * The declared table lists every real key the _FN layer can produce.  Declared
- * keys are handed straight back to QMK by the shared skeleton (design §4.12
- * "已声明放行/分发"): F1-F12 / volume are ordinary QMK output, and the vendor
- * keys (EE_CLR, HS_BATQ, BT1/2/3, 2.4G, USB) fall through to nut65.c's
- * process_record_kb tail (hs_process_record -> process_record_wls -> vendor
- * switch), so the vendor owns them with zero keymap lines.  Everything else on
- * _FN - including "Fn+L"/"Fn+top-right" (intentionally unimplemented) and bare
- * modifiers - is swallowed by the shared skeleton. */
+ * keys are either handled here (KC_L = Fn+L sleep) or handed straight back to
+ * QMK by the shared skeleton (design §4.12 "已声明放行/分发"): F1-F12 / volume
+ * are ordinary QMK output, and the vendor keys (EE_CLR, HS_BATQ, BT1/2/3, 2.4G,
+ * USB) fall through to nut65.c's process_record_kb tail (hs_process_record ->
+ * process_record_wls -> vendor switch), so the vendor owns them with zero keymap
+ * lines.  Everything else on _FN - including "Fn+top-right" while awake (the
+ * wake combo is handled by hook_pre while asleep) and bare modifiers - is
+ * swallowed by the shared skeleton. */
 static bool nut65_myfn_declared(uint16_t keycode) {
     if (keycode >= KC_F1 && keycode <= KC_F12) return true;
     if (keycode == KC_VOLD || keycode == KC_VOLU) return true;
@@ -366,6 +329,18 @@ static bool nut65_myfn_declared(uint16_t keycode) {
     if (keycode == HS_BATQ) return true;                      // vendor Fn+Space battery
     if (keycode == KC_BT1 || keycode == KC_BT2 || keycode == KC_BT3 ||
         keycode == KC_2G4 || keycode == KC_USB) return true; // vendor wireless
+    if (keycode == KC_L) return true;                         // Fn+L sleep (below)
+    return false;
+}
+
+/* Fn+L short press = deep sleep (fn/readme §1).  Preconditions: no physical
+ * mode switch (NUT65 has none) and not USB-wired; otherwise it is swallowed
+ * (空跑) so nothing leaks.  All other declared keys pass through. */
+static bool nut65_myfn(uint16_t keycode, bool pressed) {
+    if (keycode == KC_L) {
+        if (pressed && pw_no_cable()) pw_enter_sleep();
+        return true; // consume either edge (release via the shared pairing table)
+    }
     return false;
 }
 
@@ -385,7 +360,7 @@ static const vim_cfg_t g_cfg = {
     .hook_pre         = nut65_hook_pre,
     .hook_post_myfn   = NULL,
     .myfn_declared    = nut65_myfn_declared,
-    .myfn             = NULL, // all _FN keys are declared and passed through
+    .myfn             = nut65_myfn, // Fn+L sleep; every other declared key passes through
     .vim_set_enabled  = NULL, // engine default (kv_enable restarts in INSERT)
     .shortcuts        = vim_default_shortcuts,
 };
@@ -400,36 +375,12 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 void housekeeping_task_user(void) {
-    // Deep-sleep power combo: Ctrl + RightAlt + original Insert held >= 3s
-    // (wireless only).  Engage clears the keyboard report so nothing leaks while
-    // holding; the latch blocks re-engage until all three are released again.
-    bool combo_now = pw_no_cable() && pw_ctrl && pw_ralt && pw_ins;
-    if (pw_combo_latch) {
-        if (!combo_now) pw_combo_latch = false; // all released -> re-arm
-    } else if (combo_now && !pw_combo) {
-        pw_combo       = true;
-        pw_combo_timer = timer_read32();
-        clear_keyboard();
-    } else if (pw_combo && !combo_now) {
-        pw_combo = false; // aborted before firing
-    }
-    if (pw_combo && timer_elapsed32(pw_combo_timer) >= PW_HOLD_MS) {
-        pw_combo       = false;
-        pw_combo_latch = true;
-        if (pw_off) {
-            pw_boot_wireless(); // deep-sleep -> boot wireless
-        } else {
-            pw_enter_sleep();   // running -> power off (deep sleep)
-        }
-    }
-
     // USB plugged (or devs switched to USB) while powered off -> recover to
     // normal wired operation (RGB was disabled by the vendor presleep, so force
-    // it back on here just like the combo boot does).
+    // it back on here just like the wake path does).
     if (pw_off && (wireless_get_current_devs() == PW_DEVS_USB || !pw_no_cable())) {
         pw_off = false;
-        pw_combo = false;
-        pw_ctrl = pw_ralt = pw_ins = false;
+        pw_wfn = false;
         rgb_matrix_enable_noeeprom();
         suspend_wakeup_init();
     }
