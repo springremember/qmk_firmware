@@ -298,7 +298,7 @@ static bool power_combo_process(uint16_t keycode, keyrecord_t *record) {
             if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
             return true;
         }
-        bool pw_ok = (wireless_get_current_devs() != PW_DEVS_USB); // combo only off-wire
+        bool pw_ok = pw_no_cable(); // combo only with no USB cable
         if (pw_combo || (pw_ok && pw_ralt && pw_ctrl)) return true;
         return false;
     }
@@ -387,7 +387,7 @@ void housekeeping_task_user(void) {
     // Deep-sleep power combo: Ctrl + RightAlt + original Insert held >= 3s
     // (wireless only).  Engage clears the keyboard report so nothing leaks while
     // holding; the latch blocks re-engage until all three are released again.
-    bool combo_now = (wireless_get_current_devs() != PW_DEVS_USB) && pw_ctrl && pw_ralt && pw_ins;
+    bool combo_now = pw_no_cable() && pw_ctrl && pw_ralt && pw_ins;
     if (pw_combo_latch) {
         if (!combo_now) pw_combo_latch = false; // all released -> re-arm
     } else if (combo_now && !pw_combo) {
@@ -488,6 +488,12 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     // (incl. Caps) keeps the global effect, so no fixed LED is written here.
     uint8_t r = 0, g = 0, b = 0;
     vim_rgb_state_color(kv_vim_enabled(), kv_get_mode(), kv_pending(), kv_get_mode() == KV_MODE_MOUSE, &r, &g, &b);
+
+    // Esc key: vim/mouse mode colour indicator at 60% brightness (readme §4).
+    rgb_matrix_set_color(VIM_LED_INDEX,
+                         (uint8_t)((uint16_t)r * VIM_ESC_BRIGHTNESS / 100),
+                         (uint8_t)((uint16_t)g * VIM_ESC_BRIGHTNESS / 100),
+                         (uint8_t)((uint16_t)b * VIM_ESC_BRIGHTNESS / 100));
 
     // Bottom strip = battery level (highest priority). Number of lit LEDs is
     // fixed by the charge level (both ends turned off toward the middle), the
