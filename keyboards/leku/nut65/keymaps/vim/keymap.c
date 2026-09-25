@@ -216,7 +216,7 @@ void wireless_devs_change_user(uint8_t old_devs, uint8_t new_devs, bool reset) {
 }
 
 static bool pw_no_cable(void) {
-    return !readPin(HS_BAT_CABLE_PIN);
+    return !readPin(HS_BAT_CABLE_PIN) && !hs_usb_active();
 }
 
 /* ===== Fn + Right Shift + Esc -> bootloader (DFU) =====
@@ -302,13 +302,29 @@ static bool power_combo_process(uint16_t keycode, keyrecord_t *record) {
         if (pw_combo || (pw_ok && pw_ralt && pw_ctrl)) return true;
         return false;
     }
-    // Keys 2 and 1: Right Alt and either Ctrl.
-    if (keycode == KC_RALT || keycode == KC_LCTL || keycode == KC_RCTL) {
-        if (keycode == KC_RALT) {
-            pw_ralt = record->event.pressed;
-        } else {
-            pw_ctrl = record->event.pressed;
+    // Key 2: right Alt.  In this keymap the physical right-Alt position
+    // ([4,10]) resolves to the VIM_MOUSE trigger key (tap = mouse mode, hold =
+    // the Win/Mac modifier): the shared layer synthesises KC_RALT on hold via
+    // register_code(), which never passes through process_record_user - so a
+    // keycode-only KC_RALT match would never fire.  Match the matrix position
+    // (robust against the VIA dynamic keymap) plus the keycode.
+    if (keycode == VIM_MOUSE || keycode == KC_RALT ||
+        (record->event.key.row == 4 && record->event.key.col == 10)) {
+        pw_ralt = record->event.pressed;
+        if (pw_off) {
+            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
+            return true;
         }
+        if (pw_combo) return true; // swallow while the combo is pending
+        // Combo forming (wireless + Ctrl already down): swallow the trigger so
+        // its synthetic RAlt / mouse mode cannot leak to the host.
+        bool ctrl_held = (vim_glue_mods() & (MOD_BIT(KC_LCTL) | MOD_BIT(KC_RCTL))) != 0;
+        if (record->event.pressed && pw_no_cable() && ctrl_held) return true;
+        return false;
+    }
+    // Key 1: either Ctrl.
+    if (keycode == KC_LCTL || keycode == KC_RCTL) {
+        pw_ctrl = record->event.pressed;
         if (pw_off) {
             if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
             return true;

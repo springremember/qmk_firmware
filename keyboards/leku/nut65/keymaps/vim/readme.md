@@ -33,7 +33,9 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 
 ### 电源开关（仅无 USB 线时生效：`Ctrl` + 右`Alt` + 原Insert位）
 
-`Ctrl` + 右`Alt` + 原 `Insert` 键位（第 1 行最右，`_BL` 层为 `Delete`）三键组合：
+`Ctrl` + 右`Alt` + 原 `Insert` 键位（第 1 行最右，`_BL` 层为 `Delete`）三键组合。
+
+> **右`Alt` 指底排 Space 右侧第一个键**（`[4,10]`，即鼠标模式键：轻按=鼠标模式、长按=右`Alt`）。组合成型期间该键与 `Delete` 均被吞，不向主机发送；最先按下的 `Ctrl` 会在组合成立瞬间被强制释放，因此**不会形成 `Ctrl+Alt+Delete`**。
 
 | 操作 | 效果 |
 | :--- | :--- |
@@ -111,7 +113,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 > `Fn` + `1`..`0` = `F1`..`F10`；`Fn` + `-`/`=` = `F11`/`F12`；`Fn` + `[`/`]` = 音量减/增（myfn 约定）。
 > Insert 模式下数字键普通输入即可（原有的「右 `Ctrl`+数字 = F1~F10」已移除；NUT65 也没有右 `Ctrl`）。
 >
-> 底排已将**右 `Alt` 与 `Fn` 位置对调**（Mac 层为 右 `Cmd` 与 `Fn` 对调）：Win 层为 `… Space, Fn, 右Alt, ←, ↓, →`；Mac 层为 `… Space, Fn, 右Cmd, ←, ↓, →`。
+> 底排 Space 右侧为**鼠标模式键（轻按）/ 右`Alt`（长按）** 与 `Fn`：Win 层为 `… Space, 鼠标/右Alt, Fn, ←, ↓, →`；Mac 层为 `… Space, 鼠标/右Cmd, Fn, ←, ↓, →`。
 
 ## 四、Vim 状态指示（RGB）
 
@@ -137,7 +139,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 - **新增 `_FN`（myfn 新 Fn 层）**：底排 `Fn` 键由 `MO(_FL)`/`MO(_MFL)` 改为 **`MO(_FN)`**。`_FN` 内容遵循 `qmk-myfn` 约定：`1..0`=F1..F10、`-`/`=`=F11/F12、`[`/`]`=音量减/增、`Q/W/E`=蓝牙 1/2/3、`R`=2.4G、`T`=有线（`KC_USB`）、`Space`=电量（`HS_BATQ`）、`Esc`=初始化（`EE_CLR`）；其余透传。
 - `_FL` / `_MFL`（原厂 Fn 层）**原样保留、仅无进入途径**；`_DEFA` 亦然（其 `QK_BOOT` 改由 `_FN` 上的 `Fn`+右`Shift`+`Esc` 组合触发，见第六节）。
 - `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（End；Normal 模式下=鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave）见上文
-- `_BL` / `_MBL` 底排：**右 `Alt` 与 `Fn` 位置对调**（Mac 层为 右 `Cmd` 与 `Fn` 对调）——Win：`… Space, Fn, 右Alt, ←, ↓, →`；Mac：`… Space, Fn, 右Cmd, ←, ↓, →`
+- `_BL` / `_MBL` 底排：Space 右侧依次为**鼠标模式键（轻按）/ 右`Alt`（长按）** 与 `Fn`——Win：`… Space, 鼠标/右Alt, Fn, ←, ↓, →`；Mac：`… Space, 鼠标/右Cmd, Fn, ←, ↓, →`
 
 `Fn+Caps` 开关 Vim、`Fn+Esc` 初始化等由 keymap 在 `_FN` 激活时处理；Vim 功能仍为键码拦截实现。
 
