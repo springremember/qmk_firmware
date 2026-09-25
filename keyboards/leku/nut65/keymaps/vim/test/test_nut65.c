@@ -150,7 +150,7 @@ static bool power_combo_sim(uint16_t keycode, keyrecord_t *record) {
     }
     if (is_fn) g_pw_wfn = false;
     if (is_top) g_pw_wtop = false;
-    if (!g_pw_wfn && !g_pw_wtop) pw_enter_sleep_sim();
+    if ((is_fn || is_top) && !g_pw_wfn && !g_pw_wtop) pw_enter_sleep_sim();
     return true;
 }
 

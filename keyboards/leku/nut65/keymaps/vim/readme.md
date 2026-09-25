@@ -247,7 +247,7 @@ make leku/nut65:vim:flash
 - **拔线回无线错误落到默认 2.4G**：冻结"切 USB 前"设备并在拔线后重试切回（如蓝牙1）。
 - **Normal 模式 Alt+Tab 无任务视图（Alt 未保持）**：Tab 带 Alt 修饰时直接透传，不进 vim 引擎（否则 vim 会 tap 发出 LALT(Tab) 导致 Alt 松开）。**并用 `alt_tab_held` 记住这次透传**，使 Tab 的释放也总是放行——否则「先松 Alt、再松 Tab」时释放会被引擎吞掉，导致 **Tab 卡住/自动重复**；透传时若存在半途操作符（`d/y/c`）或 `g` 前缀则先 `normal_mode()` 取消。
 - **无线模式死机（按键全无反应、必须拨无线物理开关）**：根因是鼠标报告在模块未连接时触发厂商 `wireless_send_mouse` 的 `devs_change` 假切换，洪泛 smsg 队列（40 槽 × 重试 40 次 + 阻塞 UART 写）导致 `wireless_send_keyboard` 的 `while(smsg_is_busy())` 自旋死锁。修复：keymap 侧 `mouse_link_ok()` 门控所有鼠标报告源头，厂商无线栈未动。
-- **电源组合键演进**：`grave+Space` → `Ctrl+右Alt+原Insert`（V1.0–v2.10）→ **v2.11 删除**，改为 `Fn+L` 短按休眠 + `Fn+右上角` 唯一唤醒（`fn/readme` §1/§5）；`ALT_TAB` 键已移除。
+- **电源组合键演进**：`grave+Space` → `Ctrl+右Alt+原Insert`（V1.0–v2.10）→ **v2.11 删除**，改为 `Fn+L` 短按休眠 + `Fn+右上角` 唯一唤醒（`fn/readme` §1/§5；v2.12 起唤醒判定与按下顺序无关）；`ALT_TAB` 键已移除。
 - **右键方案迭代**：右Alt右键 → 右Shift 单击右键 → 定稿 Normal 模式 `End` 键右键（非阻塞，housekeeping 40ms 自动释放）。
 - **SQL 模板补全**：已删除（用户要求），`keymap.c` 中 `sql_*` 模块、`Ctrl+P` 触发、按键跟踪全部移除。
 

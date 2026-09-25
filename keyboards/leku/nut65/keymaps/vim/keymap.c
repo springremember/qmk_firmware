@@ -295,7 +295,9 @@ static bool power_combo_process(uint16_t keycode, keyrecord_t *record) {
     }
     if (is_fn) pw_wfn = false;
     if (is_top) pw_wtop = false;
-    if (!pw_wfn && !pw_wtop) pw_enter_sleep(); // neither half held: re-arm sleep
+    // Re-arm sleep only when a combo half is released without completing the
+    // combo; an unrelated key already re-armed on its press.
+    if ((is_fn || is_top) && !pw_wfn && !pw_wtop) pw_enter_sleep();
     return true;
 }
 
