@@ -193,7 +193,6 @@ static bool mouse_link_ok(void) {
  * deep-sleep power combo lives below (nut65_hook_pre + the pw_* state checked
  * in housekeeping_task_user). */
 static uint8_t  pw_last_wls      = PW_DEVS_2G4; // remembered non-USB device
-static bool     pw_last_valid    = false;       // whether a real wireless devs seen
 static uint8_t  pw_frozen_wls    = PW_DEVS_2G4; // device right before switching to USB
 static bool     pw_frozen_valid  = false;
 static uint32_t pw_cable_timer   = 0;
@@ -210,8 +209,7 @@ void wireless_devs_change_user(uint8_t old_devs, uint8_t new_devs, bool reset) {
             pw_frozen_valid = true;
         }
     } else {
-        pw_last_wls   = new_devs;
-        pw_last_valid = true;
+        pw_last_wls = new_devs;
     }
 }
 
@@ -249,7 +247,8 @@ static bool pr_boot_combo(uint16_t keycode, keyrecord_t *record) {
  * straight back to sleep, so an accidental key never powers the board back on.
  * The manual V1.0 Ctrl+RightAlt+Delete combo was removed in v2.11. */
 static bool pw_off = false; // true while in (or entering) deep sleep
-static bool pw_wfn = false; // Fn ([4,11]) held as the wake-combo first key
+static bool pw_wfn = false; // Fn ([4,11]) held (wake-combo half)
+static bool pw_wtop = false; // top-right key ([0,14]) held (wake-combo half)
 
 static void pw_enter_sleep(void) {
     pw_off = true;
@@ -260,6 +259,7 @@ static void pw_enter_sleep(void) {
 static void pw_boot_wireless(void) {
     pw_off = false;
     pw_wfn = false;
+    pw_wtop = false;
     // Stale frozen device from before the sleep must not force itself back
     // after boot - manual BT/2.4G switching has to work again.
     pw_frozen_valid  = false;
@@ -283,22 +283,19 @@ static bool power_combo_process(uint16_t keycode, keyrecord_t *record) {
     bool is_fn  = (record->event.key.row == 4 && record->event.key.col == 11);
     bool is_top = (record->event.key.row == 0 && record->event.key.col == 14);
     if (record->event.pressed) {
-        if (is_fn) { // hold Fn: stay awake briefly so the combo can complete
-            pw_wfn = true;
-            return true;
-        }
-        if (is_top && pw_wfn) { // Fn + top-right = the only real wake combo
+        if (is_fn) pw_wfn = true;
+        if (is_top) pw_wtop = true;
+        if (pw_wfn && pw_wtop) { // both halves down (any press order) -> wake
             pw_boot_wireless();
             return true;
         }
-        pw_enter_sleep(); // any other key: momentary wake, then back to sleep
+        if (is_fn || is_top) return true; // hold: stay awake for the partner half
+        pw_enter_sleep();                 // unrelated key: momentary wake, back to sleep
         return true;
     }
-    // Releases: dropping Fn without the combo re-arms sleep.
-    if (is_fn && pw_wfn) {
-        pw_wfn = false;
-        pw_enter_sleep();
-    }
+    if (is_fn) pw_wfn = false;
+    if (is_top) pw_wtop = false;
+    if (!pw_wfn && !pw_wtop) pw_enter_sleep(); // neither half held: re-arm sleep
     return true;
 }
 
@@ -381,8 +378,11 @@ void housekeeping_task_user(void) {
     if (pw_off && (wireless_get_current_devs() == PW_DEVS_USB || !pw_no_cable())) {
         pw_off = false;
         pw_wfn = false;
+        pw_wtop = false;
         rgb_matrix_enable_noeeprom();
         suspend_wakeup_init();
+        lpwr_set_state(3); // LPWR_WAKEUP: finish the vendor wake path (wls.c may
+                           // otherwise force STOP again on the low-battery path)
     }
 
     // USB auto switch driven by the live USB host (plus cable pin fallback).

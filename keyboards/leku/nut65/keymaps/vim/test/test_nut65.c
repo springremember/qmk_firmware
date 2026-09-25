@@ -97,6 +97,76 @@ static bool nut65_declared_sim(uint16_t keycode) {
     if (keycode == VK_HS_BATQ) return true;
     if (keycode == VK_BT1 || keycode == VK_BT2 || keycode == VK_BT3 ||
         keycode == VK_2G4 || keycode == VK_USB) return true;
+    if (keycode == KC_L) return true; /* v2.11: Fn+L sleep */
+    return false;
+}
+
+/* ---------------- simulated NUT65 deep-sleep power state (v2.11) ----------
+ * Faithful transcription of the pw_* state + power_combo_process() +
+ * nut65_myfn() in keyboards/leku/nut65/keymaps/vim/keymap.c.  Positions come
+ * from keyboard.json: Fn = [4,11] (MO(_FN)), top-right = [0,14] (_BL Delete).
+ * pw_enter_sleep()/pw_boot_wireless() side effects (clear_keyboard / lpwr /
+ * suspend) are recorded, not executed. */
+#define PW_ROW_FN  4
+#define PW_COL_FN  11
+#define PW_ROW_TOP 0
+#define PW_COL_TOP 14
+
+static bool pr_boot_combo_sim(uint16_t keycode, keyrecord_t *record); /* defined below */
+
+static bool g_cable;           /* true = USB cable present */
+static bool g_pw_off;          /* deep sleep */
+static bool g_pw_wfn;          /* Fn half held */
+static bool g_pw_wtop;         /* top-right half held */
+static int  g_sleep_calls;     /* pw_enter_sleep() invocations */
+static int  g_wake_calls;      /* pw_boot_wireless() invocations */
+
+static bool pw_no_cable_sim(void) { return !g_cable; }
+
+static void pw_enter_sleep_sim(void) {
+    g_pw_off = true;
+    g_sleep_calls++;
+}
+
+static void pw_boot_wireless_sim(void) {
+    g_pw_off  = false;
+    g_pw_wfn  = false;
+    g_pw_wtop = false;
+    g_wake_calls++;
+}
+
+static bool power_combo_sim(uint16_t keycode, keyrecord_t *record) {
+    (void)keycode;
+    if (!g_pw_off) return false;
+    bool is_fn  = (record->event.key.row == PW_ROW_FN && record->event.key.col == PW_COL_FN);
+    bool is_top = (record->event.key.row == PW_ROW_TOP && record->event.key.col == PW_COL_TOP);
+    if (record->event.pressed) {
+        if (is_fn) g_pw_wfn = true;
+        if (is_top) g_pw_wtop = true;
+        if (g_pw_wfn && g_pw_wtop) { pw_boot_wireless_sim(); return true; }
+        if (is_fn || is_top) return true;
+        pw_enter_sleep_sim();
+        return true;
+    }
+    if (is_fn) g_pw_wfn = false;
+    if (is_top) g_pw_wtop = false;
+    if (!g_pw_wfn && !g_pw_wtop) pw_enter_sleep_sim();
+    return true;
+}
+
+/* Exact transcription of nut65_myfn() (nut65 keymap.c v2.11). */
+static bool nut65_myfn_sim(uint16_t keycode, bool pressed) {
+    if (keycode == KC_L) {
+        if (pressed && pw_no_cable_sim()) pw_enter_sleep_sim();
+        return true;
+    }
+    return false;
+}
+
+/* Composed hook_pre = pr_boot_combo then power_combo (mirrors nut65_hook_pre). */
+static bool nut65_hook_pre_sim(uint16_t keycode, keyrecord_t *record) {
+    if (pr_boot_combo_sim(keycode, record)) return true;
+    if (power_combo_sim(keycode, record)) return true;
     return false;
 }
 
@@ -130,22 +200,20 @@ static const vim_cfg_t g_cfg = {
     .hold_ms          = 200,
     .shift_esc_enable = true,
     .led_index        = 0,
-    .hook_pre         = pr_boot_combo_sim, /* NUT65 pr_boot_combo (Fn+RShift+Esc) */
+    .hook_pre         = nut65_hook_pre_sim, /* pr_boot_combo + deep-sleep wake (v2.11) */
     .hook_post_myfn   = NULL,
     .myfn_declared    = nut65_declared_sim,
-    .myfn             = NULL, /* NUT65: every _FN key is declared -> pass through */
+    .myfn             = nut65_myfn_sim, /* Fn+L sleep; other declared keys pass through */
     .vim_set_enabled  = NULL,
     .shortcuts        = vim_default_shortcuts,
 };
 
-static bool pipeline(uint16_t kc, bool pressed) {
+static bool feed_rc(uint16_t kc, bool pressed, uint8_t row, uint8_t col) {
     keyrecord_t r = {0};
     r.event.pressed = pressed;
-    return vim_pipeline_process(kc, &r, &g_cfg);
-}
-
-static bool feed(uint16_t kc, bool pressed) {
-    bool pass = pipeline(kc, pressed);
+    r.event.key.row = row;
+    r.event.key.col = col;
+    bool pass = vim_pipeline_process(kc, &r, &g_cfg);
     if (pressed) {
         if (pass) { host_press(kc); if (s_phys_n < REG_CAP) s_phys[s_phys_n++] = kc; }
     } else {
@@ -161,6 +229,8 @@ static bool feed(uint16_t kc, bool pressed) {
     return pass;
 }
 
+static bool feed(uint16_t kc, bool pressed) { return feed_rc(kc, pressed, 0, 0); }
+
 static void reset_engine(void) {
     g_now = 1000;
     s_mods = 0;
@@ -168,6 +238,12 @@ static void reset_engine(void) {
     s_phys_n = 0;
     s_orphan = 0;
     s_boot_jump_calls = 0;
+    g_cable = true; /* default wired: a stray myfn call cannot sleep */
+    g_pw_off = false;
+    g_pw_wfn = false;
+    g_pw_wtop = false;
+    g_sleep_calls = 0;
+    g_wake_calls = 0;
     layer_state = 0;
     default_layer_state = 0;
     vim_glue_init(); /* kv_init + enable + INSERT */
@@ -184,6 +260,7 @@ static void test_declared_table(void) {
         KC_F1, KC_F2, KC_F3, KC_F4, KC_F5, KC_F6, KC_F7, KC_F8, KC_F9, KC_F10,
         KC_F11, KC_F12, KC_VOLD, KC_VOLU, KC_CAPS, KC_ESC,
         VK_EE_CLR, VK_HS_BATQ, VK_BT1, VK_BT2, VK_BT3, VK_2G4, VK_USB,
+        KC_L,
     };
     for (unsigned i = 0; i < sizeof(must) / sizeof(must[0]); i++) {
         CHECK(nut65_declared_sim(must[i]) == true);
@@ -366,12 +443,109 @@ static void test_boot_combo(void) {
     fn_off();
 }
 
+/* ======================================================================
+ * 6. v2.11 Fn+L short press -> deep sleep (only when no USB cable)
+ * ====================================================================== */
+static void test_fn_l_sleep(void) {
+    /* (a) Fn+L, wireless: sleep fires once, both edges swallowed (no 'l' leak). */
+    reset_engine();
+    g_cable = false;
+    fn_on();
+    CHECK(feed(KC_L, true) == false);
+    CHECK(g_sleep_calls == 1);
+    CHECK(feed(KC_L, false) == false);
+    CHECK(s_orphan == 0);
+    fn_off();
+
+    /* (b) Fn+L, USB wired: swallowed but does NOT sleep (空跑). */
+    reset_engine();
+    g_cable = true;
+    fn_on();
+    CHECK(feed(KC_L, true) == false);
+    CHECK(g_sleep_calls == 0);
+    CHECK(feed(KC_L, false) == false);
+    CHECK(s_orphan == 0);
+    fn_off();
+
+    /* (c) L off _FN is an ordinary pass-through on both edges. */
+    reset_engine();
+    CHECK(feed(KC_L, true) == true);
+    CHECK(feed(KC_L, false) == true);
+    CHECK(s_orphan == 0);
+}
+
+/* ======================================================================
+ * 7. v2.11 Fn([4,11]) + top-right([0,14]) = the ONLY wake combo; press order
+ *    independent; unrelated keys only re-arm sleep.
+ * ====================================================================== */
+#define FN_KC MO(FN_LAYER) /* the real Fn key code at [4,11] */
+static void test_wake_combo(void) {
+    /* (a) Fn first, then top-right -> wake. */
+    reset_engine();
+    g_pw_off = true;
+    CHECK(feed_rc(FN_KC, true, PW_ROW_FN, PW_COL_FN) == false);
+    CHECK(g_wake_calls == 0);
+    CHECK(g_pw_off == true);
+    CHECK(feed_rc(KC_DEL, true, PW_ROW_TOP, PW_COL_TOP) == false);
+    CHECK(g_wake_calls == 1);
+    CHECK(g_pw_off == false);
+    CHECK(feed_rc(KC_DEL, false, PW_ROW_TOP, PW_COL_TOP) == false); /* paired */
+    CHECK(feed_rc(FN_KC, false, PW_ROW_FN, PW_COL_FN) == false);    /* paired */
+    CHECK(s_orphan == 0);
+
+    /* (b) top-right first, then Fn (row0 before row4 in one scan) -> still wakes. */
+    reset_engine();
+    g_pw_off = true;
+    CHECK(feed_rc(KC_DEL, true, PW_ROW_TOP, PW_COL_TOP) == false);
+    CHECK(g_wake_calls == 0);
+    CHECK(g_pw_off == true);
+    CHECK(feed_rc(FN_KC, true, PW_ROW_FN, PW_COL_FN) == false);
+    CHECK(g_wake_calls == 1);
+    CHECK(g_pw_off == false);
+    CHECK(feed_rc(FN_KC, false, PW_ROW_FN, PW_COL_FN) == false);
+    CHECK(feed_rc(KC_DEL, false, PW_ROW_TOP, PW_COL_TOP) == false);
+    CHECK(s_orphan == 0);
+
+    /* (c) unrelated key while asleep: consumed, re-arms sleep, never wakes. */
+    reset_engine();
+    g_pw_off = true;
+    CHECK(feed_rc(KC_A, true, 1, 1) == false);
+    CHECK(g_wake_calls == 0);
+    CHECK(g_pw_off == true);
+    CHECK(g_sleep_calls >= 1);
+    CHECK(feed_rc(KC_A, false, 1, 1) == false);
+    CHECK(s_orphan == 0);
+
+    /* (d) Fn held then released without the top-right half -> re-arm sleep. */
+    reset_engine();
+    g_pw_off = true;
+    CHECK(feed_rc(FN_KC, true, PW_ROW_FN, PW_COL_FN) == false);
+    CHECK(g_pw_off == true);
+    CHECK(g_sleep_calls == 0); /* holding: stays awake for the partner half */
+    CHECK(feed_rc(FN_KC, false, PW_ROW_FN, PW_COL_FN) == false);
+    CHECK(g_sleep_calls == 1); /* released without combo: re-arm */
+    CHECK(g_wake_calls == 0);
+    CHECK(s_orphan == 0);
+
+    /* (e) the wake combo must NOT fire while awake (pw_off == false). */
+    reset_engine();
+    feed_rc(FN_KC, true, PW_ROW_FN, PW_COL_FN);
+    feed_rc(KC_DEL, true, PW_ROW_TOP, PW_COL_TOP);
+    CHECK(g_wake_calls == 0);
+    feed_rc(KC_DEL, false, PW_ROW_TOP, PW_COL_TOP);
+    feed_rc(FN_KC, false, PW_ROW_FN, PW_COL_FN);
+    CHECK(g_wake_calls == 0);
+    CHECK(s_orphan == 0);
+}
+
 int main(void) {
     test_declared_table();
     test_declared_pass_both_edges();
     test_undeclared_z_swallowed();
     test_bare_modifier_no_leak_no_stick();
     test_boot_combo();
+    test_fn_l_sleep();
+    test_wake_combo();
     printf("nut65-sim: pass=%d fail=%d\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
