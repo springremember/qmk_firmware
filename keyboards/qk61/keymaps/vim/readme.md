@@ -10,7 +10,7 @@
 - myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
-> **版本 V2.1（当前）**：引擎迁移到 `qmk-vim-fn`（子模块，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。修复 V2.0 的「有线 USB 无法枚举」问题，见 **第十三节**。
+> **版本 V2.7（当前）**：引擎迁移到 `qmk-vim-fn`（子模块，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。有线 USB 枚举问题见 **第十三节**（P1 已修；P1′ 跨天构建复现，V2.7 定稿修复）。
 
 ## 一、键位与层
 
@@ -234,12 +234,16 @@ make qk61:vim:flash
 - **验证**：诊断固件 D1（仅删该段）刷入后 USB 立即恢复 → 定位确认；正式 V2.1 归档 `output/qk61_vim_v2.1.{bin,hex}`。
 - **教训**：启动期（尤其枚举窗口内）避免大批量 EEPROM/flash 写；需要刷新动态键位时应延后到枚举完成之后，或依赖 VIA 原生机制。
 
-### P1′ 有线 USB 再度无法枚举（V2.5 → V2.6，同一机制的另一触发源）
+### P1′ 有线 USB 再度无法枚举（V2.5 → V2.6 → V2.7，同一机制的另一触发源）
 - **现象**：刷入 V2.5（09-24 构建）后，与 V2.0 完全相同的症状复现（有线亮灯但“未知设备”，蓝牙/2.4G 正常）。
-- **根因**：**不是**本次共享层改动（`keymap.c`/`qk61.c`/`config.h`/`rules.mk` 与 V2.4 逐字节相同；共享层 diff 仅引擎逻辑，不写 flash）。真正的触发源是 **QMK/VIA 原生的 `via_init()`**：`quantum/via.c` 的 `via_eeprom_is_valid()` 用 **`QMK_BUILDDATE` 的年月日** 生成 magic，与 EEPROM 内 magic 比对；构建日期一变（V2.1/2.2/2.3=09-22、V2.4=09-23、V2.5=09-24）即判无效 → `via_init()`（在 `keyboard_init()` 中，USB 已 connect、**枚举进行中**）调用 `eeconfig_init_via()` → `dynamic_keymap_reset()`（≈960 字节）+ 宏复位。QK61 的模拟 flash 逐字节 program、`eeprom_write_block_user` 还 `__disable_irq()`，长时间关中断再次压垮枚举。V2.1 只删了 keymap **自建**的那次重灌，未触及 VIA 原生那次，故跨天刷机即复现。
-- **修复（V2.6）**：`keymap.c` 新增 `via_init_kb()`（`via_init()` 会先调用它）：因 `keymap_key_to_keycode()` 强覆盖使 VIA 动态键位永不被读，故仅按需刷新 magic（3 字节）令 `via_init()` **跳过那次 960 字节重灌**：
+- **根因**：**不是**本次共享层改动（`keymap.c`/`qk61.c`/`config.h`/`rules.mk` 与 V2.4 逐字节相同；共享层 diff 仅引擎逻辑，不写 flash）。真正的触发源是 **QMK/VIA 原生的 `via_init()`**：`quantum/via.c` 的 `via_eeprom_is_valid()` 用 **`QMK_BUILDDATE` 的年月日** 生成 magic，与 EEPROM 内 magic 比对；构建日期一变即判无效 → `via_init()` 调用 `eeconfig_init_via()` → `dynamic_keymap_reset()`（≈960 字节）+ 宏复位。QK61 的模拟 flash 逐字节 program、整页 **8KB**（`common/user_eeprom.c` `PAGE_SIZE`），一次写还可能触发关中断的整页 `ee_format`，长时间关中断压垮枚举。
+- **`via_init()` 执行时机**：`quantum/main.c` 顺序为 `keyboard_setup()`（内含 `eeprom_driver_init()` → `keyboard_pre_init_quantum()` → `keyboard_pre_init_kb()` → `keyboard_pre_init_user()`）→ `protocol_pre_init()`（USB connect，**枚举开始**）→ `keyboard_init()`（**`via_init()` 在此**）。故 `via_init()` 的重灌落在枚举窗口内。
+- **修复（V2.7，定稿）**：在 `keymap.c` 用 `keyboard_pre_init_user()` 提前刷新 magic —— 它运行在 `keyboard_setup()` 内、**USB connect 之前**，任何 flash 写 / 整页格式化都在枚举窗口之外；随后 `via_init()` 见 magic 已有效即跳过重灌。`keymap_key_to_keycode()` 强覆盖使 VIA 动态键位永不被读，故只刷 3 字节 magic 即可：
   ```c
-  void via_init_kb(void) { if (!via_eeprom_is_valid()) via_eeprom_set_valid(true); }
+  void keyboard_pre_init_user(void) {
+      if (!via_eeprom_is_valid()) via_eeprom_set_valid(true);
+  }
   ```
-  仅 QK61 使用（NUT65 无强覆盖、依赖 VIA 动态键位，不能这样做）。归档 `output/qk61_vim_v2.6.{bin,hex}`。
-- **教训**：`.build/obj_*/src/version.h` 的 `QMK_BUILDDATE` 跨天即变 → VIA magic 失效；凡「不使用 VIA 动态键位」的键盘，都应在 `via_init_kb()` 里跳过 VIA 启动重灌。
+  > 注：V2.6 曾在 `via_init_kb()` 做同样的事，但它运行在 `keyboard_init()` 内、**枚举进行中**，3 字节写仍可能触发整页 `ee_format` 而压垮枚举，故 V2.6 无效；V2.7 把写入前移到 `keyboard_pre_init_user()`。
+  > 仅 QK61 使用（NUT65 无强覆盖、依赖 VIA 动态键位，不能这样做）。归档 `output/qk61_vim_v2.7.{bin,hex}`。
+- **教训**：`.build/obj_*/src/version.h` 的 `QMK_BUILDDATE` 跨天即变 → VIA magic 失效；凡「不使用 VIA 动态键位」的键盘，应把 magic 刷新放到 USB connect **之前**（`keyboard_pre_init_user`），不要在枚举窗口内的 `via_init_kb()` 里做。
