@@ -10,7 +10,7 @@
 - myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
-> **版本 V2.8（当前）**：引擎迁移到 `qmk-vim-fn`（子模块，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。有线 USB 枚举问题见 **第十三节**（P1 已修；P1′ 理论被 P1″ 推翻——真因是镜像体积/布局，**V2.8 用 LTO 缩体修复**）。
+> **版本 V2.9（当前）**：引擎 `qmk-vim-fn`（子模块 `2c0f45b`，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。有线 USB 枚举问题见 **第十三节**（P1″ 真因=镜像体积/布局，V2.8 起用 LTO 缩体修复）。**V2.9 行为变更**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第二节）。
 
 ## 一、键位与层
 
@@ -65,14 +65,19 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。
 
 | 操作 | 效果 |
 | :--- | :--- |
-| `Caps` **按住**（≥200ms） | 临时 Normal 模式（momentary），松开回到原模式 |
-| `Caps` **短按** | 在 Normal / Insert 间互切 |
-| `Fn` + `Caps` | 开关 Vim 模式（关闭后进入透传，底灯变红，其余键位按厂商行为） |
-| `Esc` **短按** | 向宿主发送真实 Esc，固件模式不变 |
-| `Esc` **长按**（≥200ms） | 切到 Normal 模式，不发送键码 |
-| Replace（`R`）中 `Esc` | 退出替换模式回 Normal，不发送 Esc |
-| Visual / Visual Line 中 `Esc` | 真正退出可视并回 Normal |
+| `Caps` **单击** | **开关 Vim 模式**（开=回到 Insert；关=进入透传，底灯变红，其余键位按厂商行为） |
+| `Caps` **按住**（≥200ms） | 临时 Normal 模式（momentary），松开回到原模式，不改变 Vim 开关 |
+| `Fn` + `Caps` | 与裸 `Caps` **完全相同**（无特殊处理） |
+| `Esc`（Insert，非宽限） | **进入 Normal（不发送 Esc）** |
+| `Esc`（Insert，3s 宽限内） | 发送真实 Esc，留在 Insert，并**重置 3s 宽限** |
+| `Esc`（Normal 空闲） | 发送真实 Esc，**回到 Insert**，并**开启 3s 宽限** |
+| Visual / Visual Line 中 `Esc` | 真正退出可视并回 Normal（不发送 Esc） |
+| 多键 pending 时 `Esc` | 仅取消 pending，不发送键 |
 | `Tab` | **任何模式都直接透传**（真实按下/抬起/重复），`Alt+Tab` 正常 |
+
+> **Esc 宽限（3s）**：只由「Normal 空闲按 Esc 回到 Insert」开启，窗口内再按 `Esc` 会重置计时；
+> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、`i/a/o` 等）**没有宽限**。
+> 进入 Normal 用 `Esc`（或 `Caps` 长按）；`Caps` 单击只开关 Vim，不再用于进入 Normal。
 
 ## 三、Vim 功能
 
@@ -118,9 +123,12 @@ Normal 模式数字键作计数器（上限 2 位），可配合行操作（如 
 
 | 组合 | 输出 |
 | :--- | :--- |
-| 左 `Shift` + `Esc`（可同时按右 `Shift`） | `~` |
-| 右 `Shift` + `Esc`（仅右 `Shift`） | `` ` `` |
+| 左 `Shift` + `Esc` | `~` |
+| 右 `Shift` + `Esc` | `` ` `` |
 
+> **右 `Shift` 特例（仅 Vim 开启时）**：为避免孤立 Shift 触发宿主输入法切换，右 `Shift` **单独按下/抬起不发送任何键**；
+> 当它按住期间有别的键时才**临时补上左 Shift**（`右Shift+a` = `A`，`右Shift+Ctrl+C` = `Ctrl+Shift+C`），松开右 Shift 即撤下。
+> Vim 关闭时右 `Shift` 与普通修饰键无异。
 > 原「右 `Shift` + `1`..`0`/`-`/`=` = F1..F12」**已移除**（F 区改由 `_FN` 层提供）。
 > Insert 模式下 **右 `Ctrl` + 数字 = F1~F10**；左 `Ctrl` + 数字为普通 Ctrl+数字（不触发 F 区）。
 
@@ -256,7 +264,7 @@ make qk61:vim:flash
   - 纯数据 padding（无任何钩子/VIA/行为）使镜像变大同样触发；`a025d24` 全功能 = 81808 → 失败
   - 蓝牙/2.4G 正常（不经过 USB 枚举窗口）
   - 单处逻辑回退无效、与代码语义无关 ⇒ **不是某个函数，而是镜像跨过 ~0x13F60 附近的边界**（FS026 具体边界未查清）。
-- **修复（V2.8）**：对本 keymap 启用 **LTO**（`rules.mk: LTO_ENABLE = yes`）。全功能镜像 **81806 → 72580 B**（骤降 ~9 KB，远离敏感边界），实测**有线立即识别**，且 `A1`(Insert+Esc→Normal) / `A2`(Caps 单击只进 Normal) / `CAG`(hjkl 带修饰键) 全部保留。
+- **修复（V2.8）**：对本 keymap 启用 **LTO**（`rules.mk: LTO_ENABLE = yes`）。全功能镜像 **81806 → 72580 B**（骤降 ~9 KB，远离敏感边界），实测**有线立即识别**。V2.9 启用 LTO 后为 **73024 B**，仍远低于阈值。
 - **同时移除** V2.6/V2.7 的 `keyboard_pre_init_user`(VIA magic) 钩子——C1 对照已证明它针对的「跨天 magic」并非根因，留着徒增体积。
 - 归档 `output/qk61_vim_v2.8.{bin,hex}`（72580 B）。
 - **教训**：FS026/QK61 对镜像体积/布局敏感；改动 keymap/共享层后务必关注镜像大小，必要时用 `LTO_ENABLE` 压体积。另：切换 `qmk-vim-fn` 子模块后**必须 `make clean`**，否则引擎对象不会重编（会得到新旧混合的假象）。
