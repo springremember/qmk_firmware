@@ -100,7 +100,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。
 ### 编辑（actions）
 
 - `x` / `X` — 删除光标处 / 光标前字符（Del / Backspace）
-- `r` — 替换单个字符；`R` — 替换模式（持续覆盖，`Esc` / `Caps` 退出）
+- `r` — 替换单个字符；`R` — **不提供**（共享引擎未实现替换模式，见 qmk-vim-fn `vim/readme.md` §11；按下即普通透传）
 - `s` / `S` — 改写当前字符 / 整行
 - `c` / `d` / `y` + motion — 改写 / 删除 / 复制并移动（`cw`、`d$`、`yw`…）
 - `cc` / `dd` / `yy` — 改写 / 删除 / 复制整行（`dd`：选中本行文本 + `Ctrl+X` 剪切 + `Backspace`，**末行可删**、一次 `u` 完整恢复；`yy` 用整行选区复制）
@@ -165,7 +165,7 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 
 **模式色**：Vim 关闭 = 红；Normal = 蓝；Insert = 绿；Visual / Visual Line = 紫；鼠标模式 = 青。
 
-**回到打字提示（橙）**：`Normal --Esc--> Insert` 后 **3s 内**，Esc 灯与 logo 电量灯改显**橙** `#FF8000`（替换 Insert 绿），之后自动恢复。判据 = 共享层 `vim_insert_flash()`（vim 开 + 模式 Insert + Esc 宽限窗口未过期）；只有这一条路径触发，开机 / `Caps` 开启 Vim / `i`/`a`/`o`/`s`/`c` 等进入 Insert 的方式**不亮橙**。亮度与灯数与模式色一致（Esc 66%、logo 按电量）。
+**回到打字提示（橙）**：`Normal --Esc--> Insert` 后 **3s 内**，Esc 灯与 logo 电量灯改显**橙** `#FF8000`（替换 Insert 绿），之后自动恢复。判据与 `0`=不覆盖 的裁决都在共享层 `vim_insert_flash_color()`（vim 开 + 模式 Insert + Esc 宽限窗口未过期；窗口用 32 位计时，不会因 16 位回绕复活）；只有这一条路径触发，开机 / `Caps` 开启 Vim / `i`/`a`/`o`/`s`/`c` 等进入 Insert 的方式**不亮橙**。亮度与灯数与模式色一致（Esc 66%、logo 按电量）。
 
 **logo 电量个数**：`lit = (User_Batt_BaiFen * 3 + 99) / 100`；USB 有线 / 充电时 `User_Batt_BaiFen = 100` → 3 颗全亮。
 
