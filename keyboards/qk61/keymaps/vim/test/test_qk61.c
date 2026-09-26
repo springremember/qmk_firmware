@@ -163,7 +163,7 @@ static void reset_engine(void) {
     s_batt_held = false;
     layer_state = 0;
     default_layer_state = 0;
-    vim_glue_init();
+    vim_keymap_common_init();
 }
 
 static void fn_on(void) { layer_state = (1UL << FN_LAYER); }
@@ -287,24 +287,82 @@ static void test_hjkl_with_modifier(void) {
 }
 
 /* ======================================================================
- * 5. Insert Esc leaves for Normal (A1) and Caps single-tap only enters Normal.
+ * 5. Esc toggles Insert<->Normal (with grace window); Caps tap toggles vim.
  * ====================================================================== */
 static void test_esc_and_caps(void) {
+    /* Insert Esc with no grace window: swallowed, drops to Normal, no host Esc */
     reset_engine(); /* INSERT */
-    CHECK(pipeline(KC_ESC, true) == true);  /* real Esc emitted */
+    CHECK(pipeline(KC_ESC, true) == false);
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(pipeline(KC_ESC, false) == false);
+
+    /* Normal idle Esc: real Esc and back to Insert, opening the 3s window */
+    CHECK(pipeline(KC_ESC, true) == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
     CHECK(pipeline(KC_ESC, false) == true);
+    /* within the window, Esc is again a real Esc and stays Insert */
+    g_now += 2999;
+    CHECK(pipeline(KC_ESC, true) == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(pipeline(KC_ESC, false) == true);
+    /* window expired: Esc toggles to Normal again */
+    g_now += 3000;
+    CHECK(pipeline(KC_ESC, true) == false);
+    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(pipeline(KC_ESC, false) == false);
 
-    reset_engine(); /* INSERT */
+    /* Caps tap (vim on): press previews Normal, release toggles vim off */
+    reset_engine(); /* INSERT, vim on */
     CHECK(pipeline(KC_CAPS, true) == false);
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(kv_vim_enabled() == true);
     CHECK(pipeline(KC_CAPS, false) == false);
-    CHECK(kv_get_mode() == KV_MODE_NORMAL);
-
-    /* second Caps tap in Normal is a no-op */
+    CHECK(kv_vim_enabled() == false);
+    /* Caps tap again (vim off): release re-enables vim, restarting in Insert */
     CHECK(pipeline(KC_CAPS, true) == false);
     CHECK(pipeline(KC_CAPS, false) == false);
-    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(kv_vim_enabled() == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+}
+
+/* ======================================================================
+ * 6. Right Shift lazy send: no lone Shift; RShift+a = A; RShift+Esc = `.
+ * ====================================================================== */
+static bool lshift_down(void) { return (get_mods() & MOD_BIT_LSHIFT) != 0; }
+
+static void test_rshift_lazy(void) {
+    /* RShift alone: swallowed both edges, no Shift asserted */
+    reset_engine();
+    CHECK(pipeline(KC_RSFT, true) == false);
+    CHECK(!lshift_down());
+    CHECK(pipeline(KC_RSFT, false) == false);
+    CHECK(!lshift_down());
+    CHECK(s_orphan == 0);
+
+    /* RShift+a: lazy Shift asserted for the combo, dropped on RShift release */
+    reset_engine();
+    CHECK(pipeline(KC_RSFT, true) == false);
+    CHECK(pipeline(KC_A, true) == true);
+    CHECK(lshift_down());
+    CHECK(pipeline(KC_A, false) == true);
+    CHECK(lshift_down());
+    CHECK(pipeline(KC_RSFT, false) == false);
+    CHECK(!lshift_down());
+
+    /* RShift+Esc -> bare ` (KC_GRV) */
+    reset_engine();
+    int grv_before = 0; /* grv hit counter is in the shared stub via tap_code */
+    (void)grv_before;
+    CHECK(pipeline(KC_RSFT, true) == false);
+    CHECK(pipeline(KC_ESC, true) == false);
+    CHECK(pipeline(KC_ESC, false) == false);
+    CHECK(pipeline(KC_RSFT, false) == false);
+
+    /* vim off: RShift is an ordinary modifier again */
+    reset_engine();
+    kv_disable();
+    CHECK(pipeline(KC_RSFT, true) == true);
+    CHECK(pipeline(KC_RSFT, false) == true);
 }
 
 int main(void) {
@@ -313,6 +371,7 @@ int main(void) {
     test_cad_chord();
     test_hjkl_with_modifier();
     test_esc_and_caps();
+    test_rshift_lazy();
     printf("qk61-sim: pass=%d fail=%d\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

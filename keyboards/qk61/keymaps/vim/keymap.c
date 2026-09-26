@@ -98,7 +98,7 @@ void keyboard_post_init_user(void) {
     // dynamic_keymap_reset() rewrote ~960 bytes through the QK61 emulated-flash
     // driver (per-byte program with interrupts disabled) during the USB
     // enumeration window, which wedged enumeration ("unknown device").
-    vim_glue_init();
+    vim_keymap_common_init(); // resets shared statics + engine/glue (was vim_glue_init)
 
     rgb_matrix_mode_noeeprom(RGB_MATRIX_CYCLE_OUT_IN_DUAL);
     rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 106);
