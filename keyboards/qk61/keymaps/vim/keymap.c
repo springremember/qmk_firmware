@@ -213,6 +213,11 @@ static bool qk61_hook_post(uint16_t keycode, keyrecord_t *record) {
 }
 
 /* ===== Shared vim configuration ===== */
+// 「回到打字模式」提示色（规格：qmk-vim-fn/vim/design.md §4.12、readme.md §10）：
+// Normal 空闲按 Esc 回到 Insert 后 3s 内，模式色由 Insert 绿替换为橙 #FF8000，
+// 之后自动恢复。判据由共享层 vim_insert_flash() 给出；其余进入 Insert 的路径不触发。
+#define VIM_INSERT_FLASH_RGB 0xFF8000
+
 static const vim_cfg_t g_cfg = {
     .fn_layer         = MYFN_LAYER,
     .trigger_kc       = VIM_MOUSE,
@@ -223,6 +228,7 @@ static const vim_cfg_t g_cfg = {
     .hold_ms          = 200,
     .shift_esc_enable = true,
     .led_index        = VIM_LED_INDEX,
+    .insert_flash_color = VIM_INSERT_FLASH_RGB,
     .hook_pre         = NULL,
     .hook_post_myfn   = qk61_hook_post,
     .myfn_declared    = qk61_myfn_declared,
@@ -270,6 +276,12 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         if (have) {
             uint8_t r = 0, g = 0, b = 0;
             vim_rgb_state_color(enabled, m, kv_pending(), mouse, &r, &g, &b);
+            // Normal --Esc--> Insert（3s 内）：共享层判据命中时用提示色替换模式色。
+            if (vim_insert_flash()) {
+                r = (uint8_t)((VIM_INSERT_FLASH_RGB >> 16) & 0xFF);
+                g = (uint8_t)((VIM_INSERT_FLASH_RGB >> 8) & 0xFF);
+                b = (uint8_t)(VIM_INSERT_FLASH_RGB & 0xFF);
+            }
             // Esc key LED at 66% of the maximum brightness.
             rgb_matrix_set_color(vim_rgb_led_index(),
                                  (uint8_t)((uint16_t)r * VIM_ESC_BRIGHTNESS / 255),

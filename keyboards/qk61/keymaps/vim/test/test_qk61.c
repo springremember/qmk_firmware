@@ -292,6 +292,7 @@ static void test_hjkl_with_modifier(void) {
 static void test_esc_and_caps(void) {
     /* Insert Esc with no grace window: swallowed, drops to Normal, no host Esc */
     reset_engine(); /* INSERT */
+    CHECK(vim_insert_flash() == false); /* 开机：无提示色 */
     CHECK(pipeline(KC_ESC, true) == false);
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     CHECK(pipeline(KC_ESC, false) == false);
@@ -299,20 +300,25 @@ static void test_esc_and_caps(void) {
     /* Normal idle Esc: real Esc and back to Insert, opening the 3s window */
     CHECK(pipeline(KC_ESC, true) == true);
     CHECK(kv_get_mode() == KV_MODE_INSERT);
+    /* 同一窗口驱动 keymap.c 的橙色「回到打字」提示 */
+    CHECK(vim_insert_flash() == true);
     CHECK(pipeline(KC_ESC, false) == true);
     /* within the window, Esc is again a real Esc and stays Insert */
     g_now += 2999;
     CHECK(pipeline(KC_ESC, true) == true);
     CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(vim_insert_flash() == true);
     CHECK(pipeline(KC_ESC, false) == true);
     /* window expired: Esc toggles to Normal again */
     g_now += 3000;
+    CHECK(vim_insert_flash() == false);
     CHECK(pipeline(KC_ESC, true) == false);
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     CHECK(pipeline(KC_ESC, false) == false);
 
     /* Caps tap (vim on): press previews Normal, release toggles vim off */
     reset_engine(); /* INSERT, vim on */
+    CHECK(vim_insert_flash() == false);
     CHECK(pipeline(KC_CAPS, true) == false);
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     CHECK(kv_vim_enabled() == true);
@@ -323,6 +329,7 @@ static void test_esc_and_caps(void) {
     CHECK(pipeline(KC_CAPS, false) == false);
     CHECK(kv_vim_enabled() == true);
     CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(vim_insert_flash() == false); /* Caps 开启 vim 不亮橙 */
 }
 
 /* ======================================================================

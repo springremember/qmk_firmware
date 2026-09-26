@@ -10,7 +10,8 @@
 - myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
-> **版本 V2.9（当前）**：引擎 `qmk-vim-fn`（子模块 `2c0f45b`，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。有线 USB 枚举问题见 **第十三节**（P1″ 真因=镜像体积/布局，V2.8 起用 LTO 缩体修复）。**V2.9 行为变更**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第二节）。
+> **版本 V2.9（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第二节）。
+> **版本 V2.10（当前）**：引擎 `qmk-vim-fn`（子模块 `9fa2a24`，含共享层 `vim_insert_flash()`）。有线 USB 枚举问题见 **第十三节**（P1″ 真因=镜像体积/布局，V2.8 起用 LTO 缩体修复）。**V2.10 行为变更**：`Normal` 空闲按 `Esc` 回到 `Insert` 后 **Esc 灯与 logo 电量灯转橙 `#FF8000` 3s**（与 Esc 宽限窗口同一计时），随后自动回 Insert 绿（见第六节）。
 
 ## 一、键位与层
 
@@ -70,13 +71,13 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。
 | `Fn` + `Caps` | 与裸 `Caps` **完全相同**（无特殊处理） |
 | `Esc`（Insert，非宽限） | **进入 Normal（不发送 Esc）** |
 | `Esc`（Insert，3s 宽限内） | 发送真实 Esc，留在 Insert，并**重置 3s 宽限** |
-| `Esc`（Normal 空闲） | 发送真实 Esc，**回到 Insert**，并**开启 3s 宽限** |
+| `Esc`（Normal 空闲） | 发送真实 Esc，**回到 Insert**，并**开启 3s 宽限**；同时 Esc 灯与 logo 电量灯转**橙** `#FF8000` 提示「已回到打字」，3s 后自动回 Insert 绿（窗口内再按 `Esc` 续期） |
 | Visual / Visual Line 中 `Esc` | 真正退出可视并回 Normal（不发送 Esc） |
 | 多键 pending 时 `Esc` | 仅取消 pending，不发送键 |
 | `Tab` | **任何模式都直接透传**（真实按下/抬起/重复），`Alt+Tab` 正常 |
 
 > **Esc 宽限（3s）**：只由「Normal 空闲按 Esc 回到 Insert」开启，窗口内再按 `Esc` 会重置计时；
-> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、`i/a/o` 等）**没有宽限**。
+> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、`i/a/o` 等）**没有宽限**，也**不亮橙**。
 > 进入 Normal 用 `Esc`（或 `Caps` 长按）；`Caps` 单击只开关 Vim，不再用于进入 Normal。
 
 ## 三、Vim 功能
@@ -164,6 +165,8 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 
 **模式色**：Vim 关闭 = 红；Normal = 蓝；Insert = 绿；Visual / Visual Line = 紫；鼠标模式 = 青。
 
+**回到打字提示（橙）**：`Normal --Esc--> Insert` 后 **3s 内**，Esc 灯与 logo 电量灯改显**橙** `#FF8000`（替换 Insert 绿），之后自动恢复。判据 = 共享层 `vim_insert_flash()`（vim 开 + 模式 Insert + Esc 宽限窗口未过期）；只有这一条路径触发，开机 / `Caps` 开启 Vim / `i`/`a`/`o`/`s`/`c` 等进入 Insert 的方式**不亮橙**。亮度与灯数与模式色一致（Esc 66%、logo 按电量）。
+
 **logo 电量个数**：`lit = (User_Batt_BaiFen * 3 + 99) / 100`；USB 有线 / 充电时 `User_Batt_BaiFen = 100` → 3 颗全亮。
 
 **让位规则**（避免破坏 qk61.c 既有指示）：
@@ -197,7 +200,8 @@ make qk61:vim
 make qk61:vim:flash
 ```
 
-产物：`qk61_vim.bin` / `qk61_vim.hex`（留档于仓库 `output/`）。
+产物：`qk61_vim.bin` / `qk61_vim.hex`（留档于仓库 `output/`，按版本另存为
+`output/qk61_vim_vX.Y.{bin,hex}`，配套 VIA 定义另存 `output/qk61_vim_vX.Y_via.json`）。
 
 ## 十、已知局限
 
