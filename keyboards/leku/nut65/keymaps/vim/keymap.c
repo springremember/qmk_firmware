@@ -346,6 +346,11 @@ static bool nut65_myfn(uint16_t keycode, bool pressed) {
 /* ===== Shared vim configuration ===== */
 static bool nut65_is_mac(void) { return get_highest_layer(default_layer_state) == _MBL; }
 
+// 「回到打字模式」提示色（规格：qmk-vim-fn/vim/design.md §4.12、readme.md §10）：
+// Normal 空闲按 Esc 回到 Insert 后 3s 内，模式色由 Insert 绿替换为橙 #FF8000，
+// 之后自动恢复。判据由共享层 vim_insert_flash() 给出；其余进入 Insert 的路径不触发。
+#define NUT65_INSERT_FLASH_RGB 0xFF8000
+
 static const vim_cfg_t g_cfg = {
     .fn_layer         = _FN,
     .trigger_kc       = VIM_MOUSE,
@@ -356,6 +361,7 @@ static const vim_cfg_t g_cfg = {
     .hold_ms          = 200,
     .shift_esc_enable = true,
     .led_index        = VIM_LED_INDEX,
+    .insert_flash_color = NUT65_INSERT_FLASH_RGB,
     .hook_pre         = nut65_hook_pre,
     .hook_post_myfn   = NULL,
     .myfn_declared    = nut65_myfn_declared,
@@ -457,6 +463,14 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     // (incl. Caps) keeps the global effect, so no fixed LED is written here.
     uint8_t r = 0, g = 0, b = 0;
     vim_rgb_state_color(kv_vim_enabled(), kv_get_mode(), kv_pending(), kv_get_mode() == KV_MODE_MOUSE, &r, &g, &b);
+
+    // Normal --Esc--> Insert（3s 内）：共享层判据命中时用提示色替换模式色，
+    // 作用于下面的 Esc 灯与底部电量灯条（其余键位仍走全局灯效）。
+    if (vim_insert_flash()) {
+        r = (uint8_t)((NUT65_INSERT_FLASH_RGB >> 16) & 0xFF);
+        g = (uint8_t)((NUT65_INSERT_FLASH_RGB >> 8) & 0xFF);
+        b = (uint8_t)(NUT65_INSERT_FLASH_RGB & 0xFF);
+    }
 
     // Esc key: vim/mouse mode colour indicator at 60% brightness (readme §4).
     rgb_matrix_set_color(VIM_LED_INDEX,

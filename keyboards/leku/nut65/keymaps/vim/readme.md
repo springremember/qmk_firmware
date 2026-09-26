@@ -2,7 +2,8 @@
 
 基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
-> **版本 V2.14（当前）**：引擎 `qmk-vim-fn`（子模块 `2c0f45b`）。**V2.14 行为变更**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
+> **版本 V2.14（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
+> **版本 V2.15（当前）**：引擎 `qmk-vim-fn`（子模块 `9fa2a24`，含共享层 `vim_insert_flash()`）。**V2.15 行为变更**：`Normal` 空闲按 `Esc` 回到 `Insert` 后 **Esc 灯与底部电量灯条转橙 `#FF8000` 3s**（与 Esc 宽限窗口同一计时），随后自动回 Insert 绿（见第四节）。
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十七节**；V1.0 固件另存 `output/leku_nut65_vim_v1.0.bin`（避免被后续重构覆盖）。
 
@@ -29,12 +30,12 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | :--- | :--- |
 | `Esc`（Insert，非宽限） | **进入 Normal（不发送 Esc）** |
 | `Esc`（Insert，3s 宽限内） | 发送真实 Esc，留在 Insert，并**重置 3s 宽限** |
-| `Esc`（Normal 空闲） | 发送真实 Esc，**回到 Insert**，并**开启 3s 宽限** |
+| `Esc`（Normal 空闲） | 发送真实 Esc，**回到 Insert**，并**开启 3s 宽限**；同时 Esc 灯与底部电量灯条转**橙** `#FF8000` 提示「已回到打字」，3s 后自动回 Insert 绿（窗口内再按 `Esc` 续期） |
 | 多键 pending 时 `Esc` | 仅取消 pending，不发送键 |
 | Visual / Visual Line 中按 `Esc` | 退出可视并回 Normal（含取消选区，不发送 Esc） |
 
 > **Esc 宽限（3s）**：只由「Normal 空闲按 Esc 回到 Insert」开启，窗口内再按 `Esc` 会重置计时；
-> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、编辑命令）**没有宽限**。进入 Normal 现由 `Esc`（或 `Caps` 长按）负责。
+> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、编辑命令）**没有宽限**，也**不亮橙**。进入 Normal 现由 `Esc`（或 `Caps` 长按）负责。
 
 ### 电源开关（休眠 / 唤醒）
 
@@ -74,7 +75,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 
 - `x` / `X` — 删除光标处字符 / 删除光标前字符（Del / Backspace）
 - `r` — 替换单个字符（Delete 后输入新字符）
-- `R` — **替换模式**：进入后持续逐个覆盖字符（每键 = Delete + 输入），光标前进；行尾自动变为插入；按 `Esc` 或 `Caps` 退出（替换模式期间底部灯条变橙）
+- `R` — **不提供**（共享引擎未实现替换模式，见 qmk-vim-fn `vim/readme.md` §11；按下即普通透传）
 - `s` / `S` — 改写当前字符 / 改写整行（近似 vim 语义）
 - `c` / `d` / `y` + motion — 改写 / 删除 / 复制并移动（`cw`、`d$`、`yw`…）
 - `cc` / `dd` / `yy` — 改写 / 删除 / 复制整行
@@ -134,7 +135,8 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | Insert | 绿 |
 | Visual / Visual Line | 紫 |
 | Vim 关闭（透传） | 红 |
-| R 替换模式 | 橙 |
+
+**回到打字提示（橙）**：`Normal --Esc--> Insert` 后 **3s 内**，`Esc` 灯与底部电量灯条改显**橙** `#FF8000`（替换 Insert 绿），之后自动恢复。判据 = 共享层 `vim_insert_flash()`（vim 开 + 模式 Insert + Esc 宽限窗口未过期）；只有这一条路径触发，开机 / `Caps` 开启 Vim / `i`/`a`/`o`/`s`/`c` 等进入 Insert 的方式**不亮橙**。亮度与灯数不变（Esc 60%、底条 6% / 按电量）。
 
 **底部灯条 = 电量指示（第一优先级，亮度 6%）**：80 颗底部灯中亮起的颗数固定由电量决定——从左右两端向中间熄灭，只保留中央与电量等比的灯段（如 50% 电量亮中央 40 颗）。模式/状态只影响该段灯的颜色（见上表），不影响亮灯数量。USB 有线（插线）时视为满电，底部灯条**全亮**。
 > 侧灯（底部灯条两端角落小灯 10/11/13/14）不参与电量显示，恒熄灭。
@@ -172,7 +174,8 @@ make leku/nut65:vim ALLOW_WARNINGS=yes
 make leku/nut65:vim:flash
 ```
 
-产物：`leku_nut65_vim.bin`（复制到项目 output/ 目录留档）。
+产物：`leku_nut65_vim.bin`（留档于仓库 `output/`，按版本另存为
+`output/leku_nut65_vim_vX.Y.{bin,hex}`，配套 VIA 定义另存 `output/leku_nut65_vim_vX.Y_via.json`）。
 
 进入 bootloader 方式（任选其一）：
 - 按住 `Fn` + `Right Shift` + `Esc`（**厂商原厂组合键**，按 myfn 最高优先级约束保留；本 vim keymap 已实现：`_FN` 上 `Esc` 解析为 `EE_CLR`，keymap 拦截为 `eeconfig_disable()`+`bootloader_jump()`）
@@ -249,7 +252,7 @@ make leku/nut65:vim:flash
 - **dd（末行可删）**：`Home`×2 → `Shift+End`（选中本行文本）→ `Ctrl+X`（单次剪切，进剪贴板，`p` 可粘）→ `Backspace`（删掉残留空行的前换行）；`Ndd` 先按 count 扩展选区。**首行会留一个空行**。因剪切+退格是两次主机编辑，引擎用 `vim_extra_undos` 让一次 `u` / 重做自动重复一次，从而一次恢复/重做（切到其它键后失效）。见 `qmk-vim/src/{actions,modes}.c`。
 - **dd 后 k 误删行**：dd 执行完必须调 `normal_mode()` 清 pending，否则 `process_func` 停在 `process_vim_action`、后续 motion 会再触发 delete。Esc 短按/长按在 Normal 模式也先 `normal_mode()` 取消 pending operator。
 - **可视模式（Visual / Visual Line）Esc 退出**：可视模式下 Esc 直接落到 qmk-vim 原生处理（真实 Esc 退出）。
-- **R 替换模式 Esc 无法退出 / 底条不恢复**：`normal_mode_user` 需用强符号覆盖（weak 会随机选中导致 `replace_active` 不清）。
+- **R 替换模式 Esc 无法退出 / 底条不恢复**（V1.0 旧引擎）：`normal_mode_user` 需用强符号覆盖（weak 会随机选中导致 `replace_active` 不清）。**V2.x 起替换模式已不提供**（见第二节），故本条仅作历史记录，橙色现用于「回到打字」提示。
 - **dot repeat 多了 j**：Caps 切 Normal 后调 `add_repeat_keycode(KC_NO)` 停止记录。
 - **开机（电源组合）后灯光不恢复**：`pw_boot` 显式 enable RGB + 走厂商 LPWR_WAKEUP 路径。
 - **拔线回无线错误落到默认 2.4G**：冻结"切 USB 前"设备并在拔线后重试切回（如蓝牙1）。

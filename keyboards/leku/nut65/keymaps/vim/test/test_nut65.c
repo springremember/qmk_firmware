@@ -548,17 +548,21 @@ static bool lshift_down(void) { return (get_mods() & MOD_BIT_LSHIFT) != 0; }
 static void test_esc_caps_rshift(void) {
     /* Esc: Insert（无宽限）吞键进 Normal；Normal 空闲发真 Esc 回 Insert 开宽限 */
     reset_engine();
+    CHECK(vim_insert_flash() == false);  /* 开机：无提示色 */
     CHECK(feed(KC_ESC, true) == false);
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     CHECK(feed(KC_ESC, false) == false);
     CHECK(feed(KC_ESC, true) == true);   /* Normal 空闲 -> 真 Esc */
     CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(vim_insert_flash() == true);   /* 同一窗口驱动橙色「回到打字」提示 */
     CHECK(feed(KC_ESC, false) == true);
     g_now += 2999;
     CHECK(feed(KC_ESC, true) == true);   /* 宽限内 -> 真 Esc，留 Insert */
     CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(vim_insert_flash() == true);
     CHECK(feed(KC_ESC, false) == true);
     g_now += 3000;
+    CHECK(vim_insert_flash() == false);  /* 窗口过期 -> 回 Insert 绿 */
     CHECK(feed(KC_ESC, true) == false);  /* 宽限过 -> 吞键进 Normal */
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     CHECK(feed(KC_ESC, false) == false);
@@ -574,6 +578,7 @@ static void test_esc_caps_rshift(void) {
     CHECK(feed(KC_CAPS, false) == false);
     CHECK(kv_vim_enabled() == true);
     CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(vim_insert_flash() == false);  /* Caps 开 vim 不亮橙 */
 
     /* Fn+Caps 与裸 Caps 相同 */
     reset_engine();
