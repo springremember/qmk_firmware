@@ -246,7 +246,7 @@ static void reset_engine(void) {
     g_wake_calls = 0;
     layer_state = 0;
     default_layer_state = 0;
-    vim_glue_init(); /* kv_init + enable + INSERT */
+    vim_keymap_common_init(); /* shared statics + kv_init/enable/INSERT */
 }
 
 static void fn_on(void) { layer_state = (1UL << FN_LAYER); }
@@ -412,13 +412,15 @@ static void test_boot_combo(void) {
     CHECK(feed(KC_LSFT, false) == false);
     fn_off();
 
-    /* (c) RightShift + Esc without Fn must NOT fire. */
+    /* (c) RightShift + Esc without Fn must NOT fire.  (Right Shift is swallowed
+     *     by the lazy-Shift rule even without Fn, but the shadow still holds it.) */
     reset_engine();
-    CHECK(feed(KC_RSFT, true) == true);                   /* Fn off: QMK registers RSFT */
+    CHECK(feed(KC_RSFT, true) == false);                  /* lazy Shift: swallowed */
+    CHECK((vim_glue_mods() & MOD_BIT(KC_RSFT)) != 0);
     CHECK(feed(VK_EE_CLR, true) == true);
     CHECK(s_boot_jump_calls == 0);
     CHECK(feed(VK_EE_CLR, false) == true);
-    CHECK(feed(KC_RSFT, false) == true);
+    CHECK(feed(KC_RSFT, false) == false);
     fn_off();
 
     /* (d) Fn + RightShift + a non-Esc _FN key (F1) must NOT fire. */
@@ -538,6 +540,71 @@ static void test_wake_combo(void) {
     CHECK(s_orphan == 0);
 }
 
+/* ======================================================================
+ * 8. Esc 切换 + 3s 宽限；Caps 单击开关 vim；右 Shift 懒发送（共享层新语义）
+ * ====================================================================== */
+static bool lshift_down(void) { return (get_mods() & MOD_BIT_LSHIFT) != 0; }
+
+static void test_esc_caps_rshift(void) {
+    /* Esc: Insert（无宽限）吞键进 Normal；Normal 空闲发真 Esc 回 Insert 开宽限 */
+    reset_engine();
+    CHECK(feed(KC_ESC, true) == false);
+    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(feed(KC_ESC, false) == false);
+    CHECK(feed(KC_ESC, true) == true);   /* Normal 空闲 -> 真 Esc */
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(feed(KC_ESC, false) == true);
+    g_now += 2999;
+    CHECK(feed(KC_ESC, true) == true);   /* 宽限内 -> 真 Esc，留 Insert */
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(feed(KC_ESC, false) == true);
+    g_now += 3000;
+    CHECK(feed(KC_ESC, true) == false);  /* 宽限过 -> 吞键进 Normal */
+    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(feed(KC_ESC, false) == false);
+
+    /* Caps 单击（vim on）：press 预览 Normal，release 开关 vim */
+    reset_engine();
+    CHECK(feed(KC_CAPS, true) == false);
+    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(kv_vim_enabled() == true);
+    CHECK(feed(KC_CAPS, false) == false);
+    CHECK(kv_vim_enabled() == false);
+    CHECK(feed(KC_CAPS, true) == false);  /* vim off：仍被消费 */
+    CHECK(feed(KC_CAPS, false) == false);
+    CHECK(kv_vim_enabled() == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+
+    /* Fn+Caps 与裸 Caps 相同 */
+    reset_engine();
+    fn_on();
+    CHECK(feed(KC_CAPS, true) == false);
+    CHECK(feed(KC_CAPS, false) == false);
+    CHECK(kv_vim_enabled() == false);
+    fn_off();
+
+    /* 右 Shift 懒发送 */
+    reset_engine();
+    CHECK(feed(KC_RSFT, true) == false);  /* 孤立右 Shift：无输出 */
+    CHECK(!lshift_down());
+    CHECK(feed(KC_RSFT, false) == false);
+    CHECK(!lshift_down());
+    reset_engine();
+    CHECK(feed(KC_RSFT, true) == false);
+    CHECK(feed(KC_A, true) == true);      /* 右Shift+a -> 临时补左Shift */
+    CHECK(lshift_down());
+    CHECK(feed(KC_A, false) == true);
+    CHECK(lshift_down());
+    CHECK(feed(KC_RSFT, false) == false);
+    CHECK(!lshift_down());
+
+    /* vim 关闭：右 Shift 恢复正常 */
+    reset_engine();
+    kv_disable();
+    CHECK(feed(KC_RSFT, true) == true);
+    CHECK(feed(KC_RSFT, false) == true);
+}
+
 int main(void) {
     test_declared_table();
     test_declared_pass_both_edges();
@@ -546,6 +613,7 @@ int main(void) {
     test_boot_combo();
     test_fn_l_sleep();
     test_wake_combo();
+    test_esc_caps_rshift();
     printf("nut65-sim: pass=%d fail=%d\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

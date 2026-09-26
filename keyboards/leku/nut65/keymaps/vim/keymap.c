@@ -155,7 +155,7 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 
 /* ===== Vim is always on: start in typing (Insert) mode ===== */
 void keyboard_post_init_user(void) {
-    vim_glue_init();
+    vim_keymap_common_init(); // resets shared statics + engine/glue (was vim_glue_init)
     kv_enable();
     kv_set_mode(KV_MODE_INSERT);
 
