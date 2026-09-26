@@ -10,7 +10,7 @@
 - myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
-> **版本 V2.7（当前）**：引擎迁移到 `qmk-vim-fn`（子模块，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。有线 USB 枚举问题见 **第十三节**（P1 已修；P1′ 跨天构建复现，V2.7 定稿修复）。
+> **版本 V2.8（当前）**：引擎迁移到 `qmk-vim-fn`（子模块，`engine/` 纯 C 核心 + `qmk/` 共享适配层），keymap 只保留 QK61 专属部分。有线 USB 枚举问题见 **第十三节**（P1 已修；P1′ 理论被 P1″ 推翻——真因是镜像体积/布局，**V2.8 用 LTO 缩体修复**）。
 
 ## 一、键位与层
 
@@ -247,3 +247,16 @@ make qk61:vim:flash
   > 注：V2.6 曾在 `via_init_kb()` 做同样的事，但它运行在 `keyboard_init()` 内、**枚举进行中**，3 字节写仍可能触发整页 `ee_format` 而压垮枚举，故 V2.6 无效；V2.7 把写入前移到 `keyboard_pre_init_user()`。
   > 仅 QK61 使用（NUT65 无强覆盖、依赖 VIA 动态键位，不能这样做）。归档 `output/qk61_vim_v2.7.{bin,hex}`。
 - **教训**：`.build/obj_*/src/version.h` 的 `QMK_BUILDDATE` 跨天即变 → VIA magic 失效；凡「不使用 VIA 动态键位」的键盘，应把 magic 刷新放到 USB connect **之前**（`keyboard_pre_init_user`），不要在枚举窗口内的 `via_init_kb()` 里做。
+
+### P1″ 定盘：真因是「镜像体积/布局」，非 VIA magic（V2.8 修复）
+- **推翻 P1′**：做一个与 V2.4 **逐字节仅差 3 字节**（仅 `QMK_BUILDDATE` 日期位 `23→25`）的对照固件（今天构建、源码完全相同），实测**有线正常** ⇒ **构建日期 / VIA magic 不是根因**。
+- **真因（实测规律）**：QK61/FS026 上**固件镜像体积/布局**是敏感点——
+  - `c8ce99c` + V2.4 keymap = **81752 B（0x13F58）→ 正常**
+  - 同源仅 +16 B（加一个只读 `via_eeprom_is_valid()` 钩子）= **81768（0x13F68）→ 有线枚举失败**
+  - 纯数据 padding（无任何钩子/VIA/行为）使镜像变大同样触发；`a025d24` 全功能 = 81808 → 失败
+  - 蓝牙/2.4G 正常（不经过 USB 枚举窗口）
+  - 单处逻辑回退无效、与代码语义无关 ⇒ **不是某个函数，而是镜像跨过 ~0x13F60 附近的边界**（FS026 具体边界未查清）。
+- **修复（V2.8）**：对本 keymap 启用 **LTO**（`rules.mk: LTO_ENABLE = yes`）。全功能镜像 **81806 → 72580 B**（骤降 ~9 KB，远离敏感边界），实测**有线立即识别**，且 `A1`(Insert+Esc→Normal) / `A2`(Caps 单击只进 Normal) / `CAG`(hjkl 带修饰键) 全部保留。
+- **同时移除** V2.6/V2.7 的 `keyboard_pre_init_user`(VIA magic) 钩子——C1 对照已证明它针对的「跨天 magic」并非根因，留着徒增体积。
+- 归档 `output/qk61_vim_v2.8.{bin,hex}`（72580 B）。
+- **教训**：FS026/QK61 对镜像体积/布局敏感；改动 keymap/共享层后务必关注镜像大小，必要时用 `LTO_ENABLE` 压体积。另：切换 `qmk-vim-fn` 子模块后**必须 `make clean`**，否则引擎对象不会重编（会得到新旧混合的假象）。

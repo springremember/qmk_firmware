@@ -48,35 +48,6 @@ uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {
     return KC_NO;
 }
 
-/* VIA stores a "valid" magic in EEPROM derived from QMK_BUILDDATE (year/month/
- * day).  Whenever the firmware is built on a different day the magic no longer
- * matches, and VIA's own via_init() calls eeconfig_init_via() ->
- * dynamic_keymap_reset() (~960 bytes) + macro reset.  via_init() runs from
- * keyboard_init(), i.e. AFTER protocol_pre_init() has connected USB and while
- * enumeration is in progress.  On the QK61 emulated-flash driver every changed
- * byte is a flash program, a full page is 8 kB (`common/user_eeprom.c`
- * PAGE_SIZE), and any write can therefore trigger an irq-disabled page format -
- * which wedges USB enumeration: the device lights up but is not recognised,
- * while BT/2.4G keep working (readme §13 P1/P1').
- *
- * keymap_key_to_keycode() above is a strong override, so VIA's dynamic keymap is
- * never read — resetting it is pointless.  Instead only refresh the 3-byte magic
- * so via_init() skips the rewrite.  Crucially this is done in
- * keyboard_pre_init_user(): keyboard_setup() (which runs eeprom_driver_init(),
- * then keyboard_pre_init_user()) executes BEFORE protocol_pre_init() connects
- * USB, so this write - and any page format it triggers - stays off the
- * enumeration window.  (The earlier via_init_kb() variant ran inside
- * keyboard_init(), i.e. during enumeration, and could still wedge USB.)
- *
- * Keyboards that actually use the VIA dynamic keymap must NOT do this. */
-#ifdef VIA_ENABLE
-void keyboard_pre_init_user(void) {
-    if (!via_eeprom_is_valid()) {
-        via_eeprom_set_valid(true);
-    }
-}
-#endif
-
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_WIN_BASE] = LAYOUT_60_ansi(
