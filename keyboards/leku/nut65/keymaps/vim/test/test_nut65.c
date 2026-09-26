@@ -60,9 +60,11 @@ void unregister_code(uint16_t kc) {
 void tap_code(uint16_t kc) { register_code(kc); unregister_code(kc); }
 void tap_code16(uint16_t kc) { tap_code((uint16_t)(kc & 0xFF)); }
 
-static uint16_t g_now;
-uint16_t timer_read(void) { return g_now; }
-uint16_t timer_elapsed(uint16_t since) { return (uint16_t)(g_now - since); }
+static uint32_t g_now;
+uint16_t timer_read(void) { return (uint16_t)g_now; }
+uint16_t timer_elapsed(uint16_t since) { return (uint16_t)((uint16_t)g_now - since); }
+uint32_t timer_read32(void) { return g_now; }
+uint32_t timer_elapsed32(uint32_t since) { return g_now - since; }
 
 static int reg_count(uint16_t kc) {
     int n = 0;
@@ -566,6 +568,25 @@ static void test_esc_caps_rshift(void) {
     CHECK(feed(KC_ESC, true) == false);  /* 宽限过 -> 吞键进 Normal */
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     CHECK(feed(KC_ESC, false) == false);
+
+    /* 审计 P1 回归：窗口不得因 16 位计时回绕复活（持续打字 65.5s 假亮橙） */
+    reset_engine(); /* INSERT */
+    g_now = 1000;
+    CHECK(feed(KC_ESC, true) == false);   /* -> NORMAL */
+    (void)feed(KC_ESC, false);
+    CHECK(feed(KC_ESC, true) == true);    /* t0=1000 开窗 */
+    CHECK(vim_insert_flash() == true);
+    (void)feed(KC_ESC, false);
+    g_now = 1000 + 65000;                 /* 远过 3s，但未回绕 */
+    CHECK(vim_insert_flash() == false);
+    g_now = 1000 + 65536;                 /* 恰好 16 位回绕点：必须仍为假 */
+    CHECK(vim_insert_flash() == false);
+    g_now = 1000 + 68535;                 /* 回绕后 +2999ms：仍为假 */
+    CHECK(vim_insert_flash() == false);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(feed(KC_ESC, true) == false);   /* 窗口已过期 -> 仍吞键进 Normal */
+    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    (void)feed(KC_ESC, false);
 
     /* Caps 单击（vim on）：press 预览 Normal，release 开关 vim */
     reset_engine();
