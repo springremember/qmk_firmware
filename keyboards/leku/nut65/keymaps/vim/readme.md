@@ -2,13 +2,15 @@
 
 基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
+> **版本 V2.14（当前）**：引擎 `qmk-vim-fn`（子模块 `2c0f45b`）。**V2.14 行为变更**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
+
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十七节**；V1.0 固件另存 `output/leku_nut65_vim_v1.0.bin`（避免被后续重构覆盖）。
 
 ## 一、模式与开关
 
 ### Vim 永久开启
 
-Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可通过 `Fn` + `Caps` 关闭/开启 Vim（关闭后固件进入"透传"状态，指示灯变红，其余键位均按厂商行为使用）。
+Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可通过 `Caps` **单击**关闭/开启 Vim（关闭后固件进入"透传"状态，指示灯变红，其余键位均按厂商行为使用）。
 
 ### 模式切换
 
@@ -16,20 +18,23 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | :--- | :--- |
 | `i` / `a` / `A` / `I` / `o` / `O` | 进入插入模式（`i` 光标处、`a` 后移一格、`I` 行首、`A` 行尾、`o` 下一行新行、`O` 上一行新行） |
 | `v` / `V` | 进入可视模式 / 可视行模式 |
-| `Caps` **按住**（≥200ms） | 临时 Normal 模式（momentary），松开回到原模式（从 Insert 来则回打字） |
-| `Caps` **短按** | 在 Normal / Insert 间互切（Insert→Normal；已在 Normal 则→Insert） |
-| `Esc` **长按**（≥200ms） | 切到 Normal 模式（不发送键码） |
-| `Fn` + `Caps` | 开关 Vim 模式 |
-| `Esc` 短按 | 见下方 Esc 行为表 |
+| `Caps` **单击** | **开关 Vim 模式**（开=回到 Insert；关=进入透传，指示灯变红） |
+| `Caps` **按住**（≥200ms） | 临时 Normal 模式（momentary），松开回到原模式（从 Insert 来则回打字），不改变 Vim 开关 |
+| `Fn` + `Caps` | 与裸 `Caps` **完全相同**（无特殊处理） |
+| `Esc` | 见下方 Esc 行为表 |
 
 ### Esc 行为
 
 | 操作 | 效果 |
 | :--- | :--- |
-| 短按 `Esc` | 向宿主发送真实 Esc（清高亮/取消/退出输入法候选），固件模式**不变** |
-| 长按 `Esc`（≥200ms） | 固件切到 Normal 模式，不发送任何键码 |
-| Replace（`R`）中按 `Esc` | 退出替换模式回 Normal，不发送 Esc |
-| Visual / Visual Line 中按 `Esc` | 交给 qmk-vim 原生处理：退出可视并回 Normal（含取消选区） |
+| `Esc`（Insert，非宽限） | **进入 Normal（不发送 Esc）** |
+| `Esc`（Insert，3s 宽限内） | 发送真实 Esc，留在 Insert，并**重置 3s 宽限** |
+| `Esc`（Normal 空闲） | 发送真实 Esc，**回到 Insert**，并**开启 3s 宽限** |
+| 多键 pending 时 `Esc` | 仅取消 pending，不发送键 |
+| Visual / Visual Line 中按 `Esc` | 退出可视并回 Normal（含取消选区，不发送 Esc） |
+
+> **Esc 宽限（3s）**：只由「Normal 空闲按 Esc 回到 Insert」开启，窗口内再按 `Esc` 会重置计时；
+> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、编辑命令）**没有宽限**。进入 Normal 现由 `Esc`（或 `Caps` 长按）负责。
 
 ### 电源开关（休眠 / 唤醒）
 
@@ -107,9 +112,12 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 
 | 组合 | 输出 |
 | :--- | :--- |
-| 左 `Shift` + `Esc`（可同时按右 `Shift`） | `~` |
-| 右 `Shift` + `Esc`（仅右 `Shift`） | `` ` `` |
+| 左 `Shift` + `Esc` | `~` |
+| 右 `Shift` + `Esc` | `` ` `` |
 
+> **右 `Shift` 特例（仅 Vim 开启时）**：为避免孤立 Shift 触发宿主输入法切换，右 `Shift` **单独按下/抬起不发送任何键**；
+> 当它按住期间有别的键时才**临时补上左 Shift**（`右Shift+a` = `A`，`右Shift+Ctrl+C` = `Ctrl+Shift+C`），松开右 Shift 即撤下。
+> Vim 关闭时右 `Shift` 与普通修饰键无异。
 > 原先的「右 `Shift` + `1`..`0`/`-`/`=` = F1..F12」**已移除**（F 区改由 `_FN` 层提供）。
 > `Fn` + `1`..`0` = `F1`..`F10`；`Fn` + `-`/`=` = `F11`/`F12`；`Fn` + `[`/`]` = 音量减/增（myfn 约定）。
 > Insert 模式下数字键普通输入即可（原有的「右 `Ctrl`+数字 = F1~F10」已移除；NUT65 也没有右 `Ctrl`）。
@@ -142,7 +150,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 - `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（End；Normal 模式下=鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave）见上文
 - `_BL` / `_MBL` 底排：Space 右侧依次为**鼠标模式键（轻按）/ 右`Alt`（长按）** 与 `Fn`——Win：`… Space, 鼠标/右Alt, Fn, ←, ↓, →`；Mac：`… Space, 鼠标/右Cmd, Fn, ←, ↓, →`
 
-`Fn+Caps` 开关 Vim、`Fn+Esc` 初始化等由 keymap 在 `_FN` 激活时处理；Vim 功能仍为键码拦截实现。
+`Caps` 单击开关 Vim、`Fn+Esc` 初始化等由 keymap 处理；Vim 功能仍为键码拦截实现。
 
 仅对 `keyboards/leku/nut65/nut65.c` 做了 4 处最小改动（为让出 keymap 级钩子 / 适配 `_FN`）：
 1. `process_record_user` 重命名为 `hs_process_record_user`（RGB 录制逻辑，原样保留）
