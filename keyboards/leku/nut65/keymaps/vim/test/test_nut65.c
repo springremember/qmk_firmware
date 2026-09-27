@@ -588,18 +588,24 @@ static void test_esc_caps_rshift(void) {
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     (void)feed(KC_ESC, false);
 
-    /* Caps 单击（vim on）：press 已被吞、不再预览 Normal（caps/readme.md），release 开关 vim */
+    /* 裸 Caps 单击：无任何效果（caps/readme.md §2） */
     reset_engine();
     CHECK(feed(KC_CAPS, true) == false);
-    CHECK(kv_get_mode() == KV_MODE_INSERT);   /* 不再临时 Normal */
-    CHECK(kv_vim_enabled() == true);
-    CHECK(feed(KC_CAPS, false) == false);
-    CHECK(kv_vim_enabled() == false);
-    CHECK(feed(KC_CAPS, true) == false);  /* vim off：仍被消费 */
-    CHECK(feed(KC_CAPS, false) == false);
-    CHECK(kv_vim_enabled() == true);
     CHECK(kv_get_mode() == KV_MODE_INSERT);
-    CHECK(vim_insert_flash() == false);  /* Caps 开 vim 不亮橙 */
+    CHECK(kv_vim_enabled() == true);
+    CHECK(feed(KC_CAPS, false) == false);
+    CHECK(kv_vim_enabled() == true);      /* 不开/关 vim */
+    /* Fn+Caps 单击：开关 vim（关 -> 再开，从 Insert 起） */
+    fn_on();
+    CHECK(feed(KC_CAPS, true) == false);
+    CHECK(feed(KC_CAPS, false) == false);
+    CHECK(kv_vim_enabled() == false);     /* 关 */
+    CHECK(feed(KC_CAPS, true) == false);
+    CHECK(feed(KC_CAPS, false) == false);
+    CHECK(kv_vim_enabled() == true);      /* 开 */
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    fn_off();
+    CHECK(vim_insert_flash() == false);  /* Fn+Caps 开 vim 不亮橙 */
 
     /* Caps 长按（>=200ms）= Caps 模式（caps/testcase.md）：1..0/-/= → F1..F12（不带 Ctrl）；
      * 其余键 → Ctrl+base（引用计数）；松开退出；vim 开关/模式不变。 */
