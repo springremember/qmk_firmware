@@ -3,7 +3,8 @@
 基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
 > **版本 V2.14（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
-> **版本 V2.21（当前）**：审计修复 —— Caps 卡键（重入/溢出）与发错键（物理 Ctrl/层键）已修；可视计数上限 2 位、`0` 续接、`gg` 已实现。
+> **版本 V2.22（当前）**：第 2/3 轮审计修复 —— 可视输入作废统一（透传/CAG/myfn 三路径）、`gG` 不再误判为 `gg`、`g` 后接非法键按规格吞掉、Caps 重入/溢出/物理 Ctrl 三项 P0 修复；子模块 URL 修正。
+> **版本 V2.21（上一版）**：审计修复 —— Caps 卡键（重入/溢出）与发错键（物理 Ctrl/层键）已修；可视计数上限 2 位、`0` 续接、`gg` 已实现。
 > **版本 V2.20（上一版）**：`Caps` 触发改为 —— **按下即进入 Caps 模式**（不等 200ms）；**裸 `Caps` 单击无任何效果**；**`Fn`+`Caps` 单击开关 Vim**。
 > **版本 V2.19（上一版）**：`Visual-Line`（`V`）—— 灯色改为**洋红 rose** `#FF0080`（与 Visual 紫 `#800080` 区分）；进入即选中**整行**（`Home`→`Shift+End`）；`y`/`d` 等动作后**退出可视**。
 > **版本 V2.18（上一版）**：`Visual-Line`（`V`）灯色独立为**紫红** `#FF00FF`（与 Visual 的紫 `#800080` 区分）；见第四节。
@@ -263,7 +264,7 @@ make leku/nut65:vim:flash
 
 ## 十三、文件结构与产物
 
-- `keyboards/leku/nut65/keymaps/vim/`（`keymap.c` / `config.h` / `rules.mk` / `readme.md` / `qmk-vim-fn/`（**子模块**：`git@github.com:springremember/qmk-vim.git`））
+- `keyboards/leku/nut65/keymaps/vim/`（`keymap.c` / `config.h` / `rules.mk` / `readme.md` / `qmk-vim-fn/`（**子模块**：`git@github.com:springremember/qmk-vim-fn.git`））
 - `output/`：`leku_nut65_default.bin`（基线）+ `leku_nut65_vim.bin`（vim 固件）
 
 ## 十四、修复历史（已知问题，均已修复）
@@ -292,7 +293,7 @@ make leku/nut65:vim:flash
 - QMK：https://github.com/qmk/qmk_firmware
 - 厂家：https://github.com/hangshengkeji/qmk_firmware
 - 社区 QMK-VIM：https://github.com/andrewjrae/qmk-vim
-- 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim
+- 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim-fn
 - 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-myfn
 
 ## 十七、问题记录（V1.0）
