@@ -4,14 +4,15 @@
 
 硬件：CIDOO QK61（VID `0x36B0` / PID `0x3035`，矩阵 6×16，RGB Matrix 64 灯，VIA，FS026）。
 
-引擎 `qmk-vim` 为独立仓库，通过 **git 子模块**引入；「新 Fn 层」遵循 `qmk-myfn` **约定文档**（仅约定、无代码），在 `keymap.c` 内联实现：
+引擎 `qmk-vim` 为独立仓库，通过 **git 子模块**引入；「新 Fn 层」遵循 `qmk-vim-fn/fn` **约定文档**（仅约定、无代码），在 `keymap.c` 内联实现：
 
-- `keyboards/qk61/keymaps/vim/qmk-vim/` → `git@github.com:springremember/qmk-vim.git`（子模块）
-- myfn 约定 → `git@github.com:springremember/qmk-myfn.git`（**文档**；本 keymap 内联实现，不引入其代码）
+- `keyboards/qk61/keymaps/vim/qmk-vim-fn/` → `git@github.com:springremember/qmk-vim-fn.git`（子模块）
+- myfn 约定 → `git@github.com:springremember/qmk-vim-fn.git（`fn/` 目录）`（**文档**；本 keymap 内联实现，不引入其代码）
 
-> **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
+> **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-vim-fn/fn` `v1.0`。踩坑/问题记录见 **第十二节**。
 > **版本 V2.9（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第二节）。
-> **版本 V2.15（当前）**：`Caps` 触发改为 —— **按下即进入 Caps 模式**（不等 200ms）；**裸 `Caps` 单击无任何效果**；**`Fn`+`Caps` 单击开关 Vim**。
+> **版本 V2.16（当前）**：审计修复 —— Caps 卡键（重入/溢出）与发错键（物理 Ctrl/层键）已修；可视计数上限 2 位、`0` 续接、`gg` 已实现。
+> **版本 V2.15（上一版）**：`Caps` 触发改为 —— **按下即进入 Caps 模式**（不等 200ms）；**裸 `Caps` 单击无任何效果**；**`Fn`+`Caps` 单击开关 Vim**。
 > **版本 V2.14（上一版）**：`Visual-Line`（`V`）—— 灯色改为**洋红 rose** `#FF0080`（与 Visual 紫 `#800080` 区分）；进入即选中**整行**（`Home`→`Shift+End`）；`y`/`d` 等动作后**退出可视**。
 > **版本 V2.13（上一版）**：`Visual-Line`（`V`）灯色独立为**紫红** `#FF00FF`（与 Visual 的紫 `#800080` 区分）；见第六节。
 > **版本 V2.11（上一版）**：`Caps` 长按改为 **Caps 模式**（规格见 qmk-vim-fn `caps/` 模块）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl），其余键 = `Ctrl+键`，松开退出；不再临时进入 Normal（见第二节）。
@@ -203,8 +204,8 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 - `keyboards/qk61/keymaps/vim/keymap.c` — 键位、vim 交互、鼠标、灯效
 - `keyboards/qk61/keymaps/vim/config.h` — qmk-vim 功能开关、`MYFN_LAYER`、`DYNAMIC_KEYMAP_LAYER_COUNT`
 - `keyboards/qk61/keymaps/vim/rules.mk` — 引入 qmk-vim 源文件
-- `keyboards/qk61/keymaps/vim/qmk-vim/` — **子模块**：vim 引擎
-- 「新 Fn 层」myfn 约定见 `qmk-myfn` 仓库文档（本 keymap 内联实现，无子模块）
+- `keyboards/qk61/keymaps/vim/qmk-vim-fn/` — **子模块**：vim 引擎
+- 「新 Fn 层」myfn 约定见 `qmk-vim-fn/fn` 仓库文档（本 keymap 内联实现，无子模块）
 - `keyboards/qk61/qk61.c` — 厂商代码；本方案改动：指示灯钩子转调 keymap、`KC_SPC`/`KC_LGUI`/`KC_RGUI` 转交 `process_record_user`
 
 ## 九、编译与刷写
@@ -229,12 +230,12 @@ make qk61:vim:flash
 - QMK：https://github.com/qmk/qmk_firmware
 - 社区 QMK-VIM（上游引擎）：https://github.com/andrewjrae/qmk-vim
 - 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim
-- 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-myfn
+- 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-vim-fn/fn
 - QK61 官方移植参考：https://github.com/springremember/qmk_firmware_QK61
 
 ## 十二、问题记录（V1.0）
 
-> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim/CHANGES.md` 的「V1.0 问题记录」。
+> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim-fn/vim/changes.md` 的「V1.0 问题记录」。
 > **V1.0 固件另存改名**：`output/qk61_vim_v1.0.bin` / `.hex`（与 `output/qk61_vim.bin` 内容一致，仅作版本留档，避免被后续重构覆盖）。
 
 ### 通用（引擎，两键盘共有）
