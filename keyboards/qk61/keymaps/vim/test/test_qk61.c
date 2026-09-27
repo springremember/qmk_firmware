@@ -337,20 +337,25 @@ static void test_esc_and_caps(void) {
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     (void)pipeline(KC_ESC, false);
 
-    /* Caps tap (vim on): press 已被吞、不再预览 Normal（caps/readme.md），release 开关 vim */
+    /* 裸 Caps 单击：无任何效果（caps/readme.md §2） */
     reset_engine(); /* INSERT, vim on */
     CHECK(vim_insert_flash() == false);
     CHECK(pipeline(KC_CAPS, true) == false);
-    CHECK(kv_get_mode() == KV_MODE_INSERT);   /* 不再临时 Normal */
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
     CHECK(kv_vim_enabled() == true);
     CHECK(pipeline(KC_CAPS, false) == false);
-    CHECK(kv_vim_enabled() == false);
-    /* Caps tap again (vim off): release re-enables vim, restarting in Insert */
+    CHECK(kv_vim_enabled() == true);          /* 不开/关 vim */
+    /* Fn+Caps 单击：开关 vim（关），并再次开启时从 Insert 起 */
+    fn_on();
     CHECK(pipeline(KC_CAPS, true) == false);
     CHECK(pipeline(KC_CAPS, false) == false);
-    CHECK(kv_vim_enabled() == true);
+    CHECK(kv_vim_enabled() == false);         /* 关 */
+    CHECK(pipeline(KC_CAPS, true) == false);
+    CHECK(pipeline(KC_CAPS, false) == false);
+    CHECK(kv_vim_enabled() == true);          /* 开 */
     CHECK(kv_get_mode() == KV_MODE_INSERT);
-    CHECK(vim_insert_flash() == false); /* Caps 开启 vim 不亮橙 */
+    fn_off();
+    CHECK(vim_insert_flash() == false); /* Fn+Caps 开启 vim 不亮橙 */
 }
 
 /* ======================================================================
