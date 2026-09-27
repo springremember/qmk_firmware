@@ -51,13 +51,16 @@ Base 层 Esc 由 `QK_GESC` 改为 **`KC_ESC`**（供 vim 拦截）。
 
 ### 底排方案（Base 层，Win/Mac 同步）
 
-| 物理位置 | 本方案 | 短按 | 长按 |
-| :--- | :--- | :--- | :--- |
-| 右 Alt | `MO(4)` | — | 新 Fn 层（layer 4） |
-| 原 Menu | `MT(MOD_RALT, KC_LEFT)` / Mac `MT(MOD_RGUI, KC_LEFT)` | `←`（Normal 下=鼠标左移） | 右 Alt / RGUI |
-| 右 Ctrl | `MT(MOD_RCTL, KC_DOWN)` | `↓`（Normal 下=鼠标下移） | 右 Ctrl |
-| 原 Fn | `MENU_TAP_RIGHT` | `→`（Normal 下=鼠标右移） | `Menu`（`KC_APP`）/ Normal 下=鼠标右移 |
-| 右 Shift | `MT(MOD_RSFT, KC_UP)` | `↑`（Normal 下=鼠标上移） | 右 Shift |
+| 物理位置 | 当前键位 | 说明 |
+| :--- | :--- | :--- |
+| 右 Alt | `VIM_MOUSE` | **短按**进出鼠标模式（共享层 FSM）；不是 `MO(4)` |
+| 右 Ctrl | `KC_RCTL` | 普通右 Ctrl |
+| 原 Fn 位 | `MO(_FN)` | 按住进入 myfn 层（F 区/音量/无线等） |
+| 原 Menu | `KC_APP` | 普通 Menu 键 |
+| 右 Shift | `KC_RSFT` | 普通右 Shift（vim 开启时走右 Shift 懒发送） |
+
+> **注意**：本表按 `keymap.c` 的底排实际取值（`… KC_SPC, VIM_MOUSE, MO(_FN), KC_APP, KC_RCTL`）修订。
+> 旧文档曾写「Normal 下底排方向键移动指针」，该功能**不存在**；鼠标指针只在鼠标模式内由 `hjkl` 控制。
 
 - 判定阈值 = QMK `TAPPING_TERM`（默认 **200ms**）。
 - **运行时直接用编译键位**：`keymap.c` 用强符号覆盖 `keymap_key_to_keycode()` → `keycode_at_keymap_location_raw()`，忽略 EEPROM 里的 VIA 动态键位，直接从固件 `keymaps` 取键。
@@ -196,15 +199,15 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 
 ## 七、与 NUT65 的差异（未移植项）
 
-- **鼠标（部分移植）**：保留底排方向键移动指针、Space 左键、Enter 右键；未移植 NUT65 的 End 键右键、左右方向键同按右键等。
+- **鼠标模式**：由共享层 FSM 提供（`VIM_MOUSE` 键短按进出；模式内 `hjkl`=指针、`Shift+J`/`Shift+K`=滚轮、`Space`=左键、`Enter`=右键）。**没有**「Normal 下底排方向键移动指针」这类实现（旧文档曾如此描述，实际不存在）。
 - **休眠与电源管理**：QK61 使用自研 **C1 RF 状态机**（仅在 `qk61.c`，保留 `DISABLE_CUSTOM_SLEEP`）；NUT65 仍为厂商原厂方案。
 - NUT65 keymap 的 `rgb_record` 灯效录制、编码器音量等 QK61 不存在的部分未引入。
 
 ## 八、文件结构
 
 - `keyboards/qk61/keymaps/vim/keymap.c` — 键位、vim 交互、鼠标、灯效
-- `keyboards/qk61/keymaps/vim/config.h` — qmk-vim 功能开关、`MYFN_LAYER`、`DYNAMIC_KEYMAP_LAYER_COUNT`
-- `keyboards/qk61/keymaps/vim/rules.mk` — 引入 qmk-vim 源文件
+- `keyboards/qk61/keymaps/vim/config.h` — 灯位/亮度等键盘侧配置、`MYFN_LAYER`、`DYNAMIC_KEYMAP_LAYER_COUNT`
+- `keyboards/qk61/keymaps/vim/rules.mk` — 引入 `qmk-vim-fn` 共享层源文件
 - `keyboards/qk61/keymaps/vim/qmk-vim-fn/` — **子模块**：vim 引擎
 - 「新 Fn 层」myfn 约定见 `qmk-vim-fn/fn` 仓库文档（本 keymap 内联实现，无子模块）
 - `keyboards/qk61/qk61.c` — 厂商代码；本方案改动：指示灯钩子转调 keymap、`KC_SPC`/`KC_LGUI`/`KC_RGUI` 转交 `process_record_user`
@@ -230,7 +233,7 @@ make qk61:vim:flash
 
 - QMK：https://github.com/qmk/qmk_firmware
 - 社区 QMK-VIM（上游引擎）：https://github.com/andrewjrae/qmk-vim
-- 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim
+- 本方案共享层 `qmk-vim-fn`（fork）：https://github.com/springremember/qmk-vim-fn
 - 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-vim-fn/fn
 - QK61 官方移植参考：https://github.com/springremember/qmk_firmware_QK61
 
