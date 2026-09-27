@@ -3,7 +3,8 @@
 基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
 > **版本 V2.14（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
-> **版本 V2.15（当前）**：引擎 `qmk-vim-fn`（子模块 `9fa2a24`，含共享层 `vim_insert_flash()`）。**V2.15 行为变更**：`Normal` 空闲按 `Esc` 回到 `Insert` 后 **Esc 灯与底部电量灯条转橙 `#FF8000` 3s**（与 Esc 宽限窗口同一计时），随后自动回 Insert 绿（见第四节）。
+> **版本 V2.16（当前）**：`Caps` 长按改为 **Caps 模式**（规格见 qmk-vim-fn `caps/` 模块）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl），其余键 = `Ctrl+键`，松开退出；不再临时进入 Normal（见第一节）。
+> **版本 V2.15（上一版）**：引擎 `qmk-vim-fn`（子模块 `9fa2a24`，含共享层 `vim_insert_flash()`）。**V2.15 行为变更**：`Normal` 空闲按 `Esc` 回到 `Insert` 后 **Esc 灯与底部电量灯条转橙 `#FF8000` 3s**（与 Esc 宽限窗口同一计时），随后自动回 Insert 绿（见第四节）。
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十七节**；V1.0 固件另存 `output/leku_nut65_vim_v1.0.bin`（避免被后续重构覆盖）。
 
@@ -20,9 +21,22 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | `i` / `a` / `A` / `I` / `o` / `O` | 进入插入模式（`i` 光标处、`a` 后移一格、`I` 行首、`A` 行尾、`o` 下一行新行、`O` 上一行新行） |
 | `v` / `V` | 进入可视模式 / 可视行模式 |
 | `Caps` **单击** | **开关 Vim 模式**（开=回到 Insert；关=进入透传，指示灯变红） |
-| `Caps` **按住**（≥200ms） | 临时 Normal 模式（momentary），松开回到原模式（从 Insert 来则回打字），不改变 Vim 开关 |
+| `Caps` **按住**（≥200ms） | **Caps 模式**（momentary，规格 `qmk-vim-fn/caps/`）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl）；**其余键** = `Ctrl+键`（修饰键即 `Ctrl+修饰`）；松开 `Caps` 退出。**不改变 Vim 开关与模式**，Vim 关闭时同样可用 |
 | `Fn` + `Caps` | 与裸 `Caps` **完全相同**（无特殊处理） |
 | `Esc` | 见下方 Esc 行为表 |
+
+### Caps 长按模式（`F1`–`F12` + `Ctrl`）
+
+长按 `Caps`（≥200ms）进入，松开退出；模式内按键**不经过 Vim 引擎**（Vim 开关/模式不变，Vim 关闭亦可用）。
+规格与用例见 qmk-vim-fn 的 [`caps/readme.md`](qmk-vim-fn/caps/readme.md)、[`caps/testcase.md`](qmk-vim-fn/caps/testcase.md)。
+
+| 模式内按键 | 发出 |
+| :--- | :--- |
+| `1` `2` `3` `4` `5` `6` `7` `8` `9` `0` `-` `=` | `F1`…`F12`（**不带 Ctrl**，Ctrl 也不按住） |
+| **其余全部键**（含 `Enter`/`Space`/`Tab`/`Backspace`/方向键/字母/符号/修饰键） | **`Ctrl` + 该键**（`Shift` 按下即 `Ctrl+Shift`）；Ctrl 在第一个非 F 键按下时按住、最后一个松开时释放 |
+
+> 别名冲突自担：`Ctrl+M`=Enter、`Ctrl+I`=Tab、`Ctrl+H`=Backspace、`Ctrl+[`=Esc。
+> 模式内 `Esc` 发的是 `Ctrl+Esc`，不会触发 Vim 的 Esc 切换；`Caps` 短按语义不变（仍是 Vim 开关）。
 
 ### Esc 行为
 
@@ -35,7 +49,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | Visual / Visual Line 中按 `Esc` | 退出可视并回 Normal（含取消选区，不发送 Esc） |
 
 > **Esc 宽限（3s）**：只由「Normal 空闲按 Esc 回到 Insert」开启，窗口内再按 `Esc` 会重置计时；
-> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、编辑命令）**没有宽限**，也**不亮橙**。进入 Normal 现由 `Esc`（或 `Caps` 长按）负责。
+> 其余进入 Insert 的路径（开机、`Caps` 开启 Vim、编辑命令）**没有宽限**，也**不亮橙**。进入 Normal 现**只由 `Esc`** 负责（`Caps` 长按已改为 Caps 模式）。
 
 ### 电源开关（休眠 / 唤醒）
 
