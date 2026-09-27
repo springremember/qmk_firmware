@@ -337,11 +337,11 @@ static void test_esc_and_caps(void) {
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     (void)pipeline(KC_ESC, false);
 
-    /* Caps tap (vim on): press previews Normal, release toggles vim off */
+    /* Caps tap (vim on): press 已被吞、不再预览 Normal（caps/readme.md），release 开关 vim */
     reset_engine(); /* INSERT, vim on */
     CHECK(vim_insert_flash() == false);
     CHECK(pipeline(KC_CAPS, true) == false);
-    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);   /* 不再临时 Normal */
     CHECK(kv_vim_enabled() == true);
     CHECK(pipeline(KC_CAPS, false) == false);
     CHECK(kv_vim_enabled() == false);
@@ -351,6 +351,47 @@ static void test_esc_and_caps(void) {
     CHECK(kv_vim_enabled() == true);
     CHECK(kv_get_mode() == KV_MODE_INSERT);
     CHECK(vim_insert_flash() == false); /* Caps 开启 vim 不亮橙 */
+}
+
+/* ======================================================================
+ * 5b. Caps 长按模式（caps/testcase.md）：1..0/-/= → F1..F12（不带 Ctrl），
+ *     其余键 → Ctrl+base（引用计数）；松开退出；vim 开关/模式不变。
+ * ====================================================================== */
+static bool held(uint16_t kc) { return reg_count(kc) > 0; }
+
+static void test_caps_mode(void) {
+    reset_engine(); /* INSERT */
+    g_now = 7000;
+    CHECK(pipeline(KC_CAPS, true) == false);
+    g_now += 200;                              /* == hold_ms */
+    vim_keymap_common_task(g_now);             /* 进入判定在 task 里 */
+    CHECK(kv_vim_enabled() == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);    /* 不改 vim 模式 */
+    CHECK(!held(KC_LCTL));
+    CHECK(pipeline(KC_1, true) == false);      /* 模式内被本层接管 */
+    CHECK(held(KC_F1) && !held(KC_LCTL));      /* F 区不带 Ctrl */
+    CHECK(pipeline(KC_1, false) == false);
+    CHECK(!held(KC_F1));
+    CHECK(pipeline(KC_EQL, true) == false);    /* = -> F12 */
+    CHECK(held(KC_F12));
+    CHECK(pipeline(KC_EQL, false) == false);
+    CHECK(pipeline(KC_C, true) == false);      /* 其余键 = Ctrl+C */
+    CHECK(held(KC_LCTL) && held(KC_C));
+    CHECK(pipeline(KC_C, false) == false);
+    CHECK(!held(KC_LCTL));                     /* 最后一个非 F 键松开 -> Ctrl 释放 */
+    CHECK(pipeline(KC_ESC, true) == false);    /* 模式内 Esc = Ctrl+Esc，不改 vim 模式 */
+    CHECK(held(KC_LCTL) && held(KC_ESC));
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(pipeline(KC_ESC, false) == false);
+    CHECK(!held(KC_LCTL));
+    /* 退出防卡键：按住某键时直接松开 Caps */
+    CHECK(pipeline(KC_A, true) == false);
+    CHECK(held(KC_A) && held(KC_LCTL));
+    CHECK(pipeline(KC_CAPS, false) == false);
+    CHECK(!held(KC_A) && !held(KC_LCTL));
+    CHECK(kv_vim_enabled() == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(s_orphan == 0);
 }
 
 /* ======================================================================
@@ -399,6 +440,7 @@ int main(void) {
     test_cad_chord();
     test_hjkl_with_modifier();
     test_esc_and_caps();
+    test_caps_mode();
     test_rshift_lazy();
     printf("qk61-sim: pass=%d fail=%d\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
