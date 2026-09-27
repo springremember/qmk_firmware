@@ -3,7 +3,8 @@
 基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
 > **版本 V2.14（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
-> **版本 V2.20（当前）**：`Caps` 触发改为 —— **按下即进入 Caps 模式**（不等 200ms）；**裸 `Caps` 单击无任何效果**；**`Fn`+`Caps` 单击开关 Vim**。
+> **版本 V2.21（当前）**：审计修复 —— Caps 卡键（重入/溢出）与发错键（物理 Ctrl/层键）已修；可视计数上限 2 位、`0` 续接、`gg` 已实现。
+> **版本 V2.20（上一版）**：`Caps` 触发改为 —— **按下即进入 Caps 模式**（不等 200ms）；**裸 `Caps` 单击无任何效果**；**`Fn`+`Caps` 单击开关 Vim**。
 > **版本 V2.19（上一版）**：`Visual-Line`（`V`）—— 灯色改为**洋红 rose** `#FF0080`（与 Visual 紫 `#800080` 区分）；进入即选中**整行**（`Home`→`Shift+End`）；`y`/`d` 等动作后**退出可视**。
 > **版本 V2.18（上一版）**：`Visual-Line`（`V`）灯色独立为**紫红** `#FF00FF`（与 Visual 的紫 `#800080` 区分）；见第四节。
 > **版本 V2.16（上一版）**：`Caps` 长按改为 **Caps 模式**（规格见 qmk-vim-fn `caps/` 模块）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl），其余键 = `Ctrl+键`，松开退出；不再临时进入 Normal（见第一节）。
@@ -262,12 +263,12 @@ make leku/nut65:vim:flash
 
 ## 十三、文件结构与产物
 
-- `keyboards/leku/nut65/keymaps/vim/`（`keymap.c` / `config.h` / `rules.mk` / `readme.md` / `qmk-vim/`（**子模块**：`git@github.com:springremember/qmk-vim.git`））
+- `keyboards/leku/nut65/keymaps/vim/`（`keymap.c` / `config.h` / `rules.mk` / `readme.md` / `qmk-vim-fn/`（**子模块**：`git@github.com:springremember/qmk-vim.git`））
 - `output/`：`leku_nut65_default.bin`（基线）+ `leku_nut65_vim.bin`（vim 固件）
 
 ## 十四、修复历史（已知问题，均已修复）
 
-- **dd（末行可删）**：`Home`×2 → `Shift+End`（选中本行文本）→ `Ctrl+X`（单次剪切，进剪贴板，`p` 可粘）→ `Backspace`（删掉残留空行的前换行）；`Ndd` 先按 count 扩展选区。**首行会留一个空行**。因剪切+退格是两次主机编辑，引擎用 `vim_extra_undos` 让一次 `u` / 重做自动重复一次，从而一次恢复/重做（切到其它键后失效）。见 `qmk-vim/src/{actions,modes}.c`。
+- **dd（末行可删）**：`Home`×2 → `Shift+End`（选中本行文本）→ `Ctrl+X`（单次剪切，进剪贴板，`p` 可粘）→ `Backspace`（删掉残留空行的前换行）；`Ndd` 先按 count 扩展选区。**首行会留一个空行**。因剪切+退格是两次主机编辑，引擎用 `vim_extra_undos` 让一次 `u` / 重做自动重复一次，从而一次恢复/重做（切到其它键后失效）。见 `qmk-vim-fn/src/{actions,modes}.c`。
 - **dd 后 k 误删行**：dd 执行完必须调 `normal_mode()` 清 pending，否则 `process_func` 停在 `process_vim_action`、后续 motion 会再触发 delete。Esc 短按/长按在 Normal 模式也先 `normal_mode()` 取消 pending operator。
 - **可视模式（Visual / Visual Line）Esc 退出**：可视模式下 Esc 直接落到 qmk-vim 原生处理（真实 Esc 退出）。
 - **R 替换模式 Esc 无法退出 / 底条不恢复**（V1.0 旧引擎）：`normal_mode_user` 需用强符号覆盖（weak 会随机选中导致 `replace_active` 不清）。**V2.x 起替换模式已不提供**（见第二节），故本条仅作历史记录，橙色现用于「回到打字」提示。
@@ -296,7 +297,7 @@ make leku/nut65:vim:flash
 
 ## 十七、问题记录（V1.0）
 
-> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim/CHANGES.md` 的「V1.0 问题记录」。
+> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim-fn/CHANGES.md` 的「V1.0 问题记录」。
 > **V1.0 固件另存改名**：`output/leku_nut65_vim_v1.0.bin` / `.hex`（与 `output/leku_nut65_vim.bin` 内容一致，仅作版本留档，避免被后续重构覆盖）。
 
 ### 通用（引擎，两键盘共有）
