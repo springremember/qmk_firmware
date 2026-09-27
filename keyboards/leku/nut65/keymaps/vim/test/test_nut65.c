@@ -588,10 +588,10 @@ static void test_esc_caps_rshift(void) {
     CHECK(kv_get_mode() == KV_MODE_NORMAL);
     (void)feed(KC_ESC, false);
 
-    /* Caps 单击（vim on）：press 预览 Normal，release 开关 vim */
+    /* Caps 单击（vim on）：press 已被吞、不再预览 Normal（caps/readme.md），release 开关 vim */
     reset_engine();
     CHECK(feed(KC_CAPS, true) == false);
-    CHECK(kv_get_mode() == KV_MODE_NORMAL);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);   /* 不再临时 Normal */
     CHECK(kv_vim_enabled() == true);
     CHECK(feed(KC_CAPS, false) == false);
     CHECK(kv_vim_enabled() == false);
@@ -600,6 +600,31 @@ static void test_esc_caps_rshift(void) {
     CHECK(kv_vim_enabled() == true);
     CHECK(kv_get_mode() == KV_MODE_INSERT);
     CHECK(vim_insert_flash() == false);  /* Caps 开 vim 不亮橙 */
+
+    /* Caps 长按（>=200ms）= Caps 模式（caps/testcase.md）：1..0/-/= → F1..F12（不带 Ctrl）；
+     * 其余键 → Ctrl+base（引用计数）；松开退出；vim 开关/模式不变。 */
+    reset_engine();
+    g_now = 5000;
+    CHECK(feed(KC_CAPS, true) == false);
+    g_now += 200;
+    vim_keymap_common_task(g_now);            /* 进入判定在 task 里 */
+    CHECK(kv_vim_enabled() == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);   /* Caps 模式不改 vim 模式 */
+    CHECK(reg_count(KC_LCTL) == 0);           /* F 行期间不该按住 Ctrl */
+    CHECK(feed(KC_1, true) == false);         /* 模式内被本层接管 */
+    CHECK(reg_count(KC_F1) == 1);
+    CHECK(reg_count(KC_LCTL) == 0);
+    CHECK(feed(KC_1, false) == false);
+    CHECK(reg_count(KC_F1) == 0);
+    CHECK(feed(KC_C, true) == false);         /* 其余键 = Ctrl+C */
+    CHECK(reg_count(KC_LCTL) == 1 && reg_count(KC_C) == 1);
+    CHECK(feed(KC_C, false) == false);
+    CHECK(reg_count(KC_C) == 0);
+    CHECK(reg_count(KC_LCTL) == 0);           /* 最后一个非 F 键松开 -> Ctrl 释放 */
+    CHECK(feed(KC_CAPS, false) == false);     /* 松开 Caps 退出模式 */
+    CHECK(kv_vim_enabled() == true);
+    CHECK(kv_get_mode() == KV_MODE_INSERT);
+    CHECK(s_orphan == 0);
 
     /* Fn+Caps 与裸 Caps 相同 */
     reset_engine();
