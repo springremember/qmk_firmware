@@ -1,6 +1,6 @@
 # NUT65 Vim 固件
 
-基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
+基于 `qmk-vim-fn` 共享层的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
 > **版本 V2.14（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
 > **版本 V2.22（当前）**：第 2/3 轮审计修复 —— 可视输入作废统一（透传/CAG/myfn 三路径）、`gG` 不再误判为 `gg`、`g` 后接非法键按规格吞掉、Caps 重入/溢出/物理 Ctrl 三项 P0 修复；子模块 URL 修正。
@@ -11,7 +11,7 @@
 > **版本 V2.16（上一版）**：`Caps` 长按改为 **Caps 模式**（规格见 qmk-vim-fn `caps/` 模块）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl），其余键 = `Ctrl+键`，松开退出；不再临时进入 Normal（见第一节）。
 > **版本 V2.15（上一版）**：引擎 `qmk-vim-fn`（子模块 `9fa2a24`，含共享层 `vim_insert_flash()`）。**V2.15 行为变更**：`Normal` 空闲按 `Esc` 回到 `Insert` 后 **Esc 灯与底部电量灯条转橙 `#FF8000` 3s**（与 Esc 宽限窗口同一计时），随后自动回 Insert 绿（见第四节）。
 
-> **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十七节**；V1.0 固件另存 `output/leku_nut65_vim_v1.0.bin`（避免被后续重构覆盖）。
+> **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（共享层 `qmk-vim-fn` 的前身，子模块 commit `62bb338`），myfn 约定（现位于 `qmk-vim-fn/fn/`）锁定 `v1.0`。踩坑/问题记录见 **第十七节**；V1.0 固件另存 `output/leku_nut65_vim_v1.0.bin`（避免被后续重构覆盖）。
 
 ## 一、模式与开关
 
@@ -93,7 +93,7 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 ### 编辑（actions）
 
 - `x` / `X` — 删除光标处字符 / 删除光标前字符（Del / Backspace）
-- `r` — 替换单个字符（Delete 后输入新字符）
+- `r` — **不提供**（共享引擎未实现替换单字符；按下即普通透传）
 - `R` — **不提供**（共享引擎未实现替换模式，见 qmk-vim-fn `vim/readme.md` §11；按下即普通透传）
 - `s` / `S` — 改写当前字符 / 改写整行（近似 vim 语义）
 - `c` / `d` / `y` + motion — 改写 / 删除 / 复制并移动（`cw`、`d$`、`yw`…）
@@ -167,9 +167,9 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 ## 五、与厂商固件的差异
 
 键盘层定义（keymap）中：
-- **新增 `_FN`（myfn 新 Fn 层）**：底排 `Fn` 键由 `MO(_FL)`/`MO(_MFL)` 改为 **`MO(_FN)`**。`_FN` 内容遵循 `qmk-myfn` 约定：`1..0`=F1..F10、`-`/`=`=F11/F12、`[`/`]`=音量减/增、`Q/W/E`=蓝牙 1/2/3、`R`=2.4G、`T`=有线（`KC_USB`）、`L`=休眠（短按，见 §一）、`Space`=电量（`HS_BATQ`）、`Esc`=初始化（`EE_CLR`）；`Fn`+右上角键=唤醒；其余吞键。
+- **新增 `_FN`（myfn 新 Fn 层）**：底排 `Fn` 键由 `MO(_FL)`/`MO(_MFL)` 改为 **`MO(_FN)`**。`_FN` 内容遵循 myfn 约定（`qmk-vim-fn/fn/`）：`1..0`=F1..F10、`-`/`=`=F11/F12、`[`/`]`=音量减/增、`Q/W/E`=蓝牙 1/2/3、`R`=2.4G、`T`=有线（`KC_USB`）、`L`=休眠（短按，见 §一）、`Space`=电量（`HS_BATQ`）、`Esc`=初始化（`EE_CLR`）；`Fn`+右上角键=唤醒；其余吞键。
 - `_FL` / `_MFL`（原厂 Fn 层）**原样保留、仅无进入途径**；`_DEFA` 亦然（其 `QK_BOOT` 改由 `_FN` 上的 `Fn`+右`Shift`+`Esc` 组合触发，见第六节）。
-- `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（End；Normal 模式下=鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave）见上文
+- `_BL`（win Base 层）按用户要求改动键位（最右列，Delete 下方依次）：`row1→KC_WFWD`（浏览器前进）、`row2→KC_WBAK`（浏览器后退）、`row3→KC_END`（普通 End 键；**不是**鼠标右键），最右上 `Insert→Delete`，其余一致；右 `Shift` 组合键（grave）见上文
 - `_BL` / `_MBL` 底排：Space 右侧依次为**鼠标模式键（轻按）/ 右`Alt`（长按）** 与 `Fn`——Win：`… Space, 鼠标/右Alt, Fn, ←, ↓, →`；Mac：`… Space, 鼠标/右Cmd, Fn, ←, ↓, →`
 
 `Caps` 单击开关 Vim、`Fn+Esc` 初始化等由 keymap 处理；Vim 功能仍为键码拦截实现。
@@ -213,8 +213,8 @@ make leku/nut65:vim:flash
 - `e` 跳词尾：系统词跳只能到词首，与 `w` 近似
 - `^` 行首非空白、`W`/`B`/`E` 大写词、`f`/`t`/`;`/`,` 行内查找：无对应系统键
 - `%` 括号配对、`mark`/`` ` `` 跳转、`/pattern` 正则搜索（固件以宿主 Ctrl+F 替代）、`*`/`#` 词搜索
-- 文本对象（`iw`/`aw` 仅有限支持）、块选（Ctrl+V）、寄存器 `"a`、宏 `q@`、`gv`：无法通过键码实现
-- `~`、`gu`/`gU`、`<`/`>` 缩进、`zz`/`zt`/`zb`：无通用宿主命令
+- 文本对象（`iw`/`aw` **不提供**：共享层已整体剔除）、块选（Ctrl+V）、寄存器 `"a`、宏 `q@`、`gv`：无法通过键码实现
+- `~`、`gu`/`gU`、`zz`/`zt`/`zb`：无通用宿主命令（**缩进 `<`/`>` 已实现**：`>>`/`<<`/`>motion`/`>0`）
 - 数字前缀对纯移动的乘算精度取决于宿主（行操作 `dd` 等可乘算）
 - `R`/`r` 在中文输入法激活时，键入字母会进入输入法预编辑，需先切英文（与真实 vim 使用习惯一致）
 - `J` 合并不插空格、不去下一行缩进（固件无法感知行尾/行首空白）
@@ -239,7 +239,7 @@ make leku/nut65:vim:flash
 
 ## 十、实现细节
 
-- 采用 qmk-vim 引擎（全局状态机），所有 vim 功能为键码拦截实现；额外新增 `_FN` 层承载 myfn 约定键（F1-F12/音量/蓝牙/2.4G/有线/电量/初始化），原厂 `_FL/_MFL/_DEFA` 保留但无进入途径。保留 qmk-vim 原生 let-through（F 键/方向键/Ctrl/Alt 组合按默认透传）。
+- 采用 `qmk-vim-fn` 共享层（全局状态机），所有 vim 功能为键码拦截实现；额外新增 `_FN` 层承载 myfn 约定键（F1-F12/音量/蓝牙/2.4G/有线/电量/初始化），原厂 `_FL/_MFL/_DEFA` 保留但无进入途径。保留 qmk-vim 原生 let-through（F 键/方向键/Ctrl/Alt 组合按默认透传）。
 - 仅对 `keyboards/leku/nut65/nut65.c` 做 4 处最小改动：
   1. `process_record_user` 重命名 `hs_process_record_user`（RGB 录制逻辑原样保留）
   2. `housekeeping_task_user` 重命名 `hs_housekeeping_task_user`（充电/矩阵循环原样保留）
@@ -294,11 +294,11 @@ make leku/nut65:vim:flash
 - 厂家：https://github.com/hangshengkeji/qmk_firmware
 - 社区 QMK-VIM：https://github.com/andrewjrae/qmk-vim
 - 本方案 qmk-vim（fork）：https://github.com/springremember/qmk-vim-fn
-- 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-myfn
+- 「新 Fn 层」myfn 约定：https://github.com/springremember/qmk-vim-fn (fn/ 目录)
 
 ## 十七、问题记录（V1.0）
 
-> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim-fn/CHANGES.md` 的「V1.0 问题记录」。
+> 为 V1.0 冻结整理的踩坑记录，供日后重构参考。引擎级细节见 `qmk-vim-fn/vim/changes.md` 的「V1.0 问题记录」。
 > **V1.0 固件另存改名**：`output/leku_nut65_vim_v1.0.bin` / `.hex`（与 `output/leku_nut65_vim.bin` 内容一致，仅作版本留档，避免被后续重构覆盖）。
 
 ### 通用（引擎，两键盘共有）
