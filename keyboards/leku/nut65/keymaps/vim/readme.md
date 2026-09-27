@@ -3,7 +3,8 @@
 基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
 > **版本 V2.14（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第一/三节）。
-> **版本 V2.16（当前）**：`Caps` 长按改为 **Caps 模式**（规格见 qmk-vim-fn `caps/` 模块）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl），其余键 = `Ctrl+键`，松开退出；不再临时进入 Normal（见第一节）。
+> **版本 V2.18（当前）**：`Visual-Line`（`V`）灯色独立为**紫红** `#FF00FF`（与 Visual 的紫 `#800080` 区分）；见第四节。
+> **版本 V2.16（上一版）**：`Caps` 长按改为 **Caps 模式**（规格见 qmk-vim-fn `caps/` 模块）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl），其余键 = `Ctrl+键`，松开退出；不再临时进入 Normal（见第一节）。
 > **版本 V2.15（上一版）**：引擎 `qmk-vim-fn`（子模块 `9fa2a24`，含共享层 `vim_insert_flash()`）。**V2.15 行为变更**：`Normal` 空闲按 `Esc` 回到 `Insert` 后 **Esc 灯与底部电量灯条转橙 `#FF8000` 3s**（与 Esc 宽限窗口同一计时），随后自动回 Insert 绿（见第四节）。
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十七节**；V1.0 固件另存 `output/leku_nut65_vim_v1.0.bin`（避免被后续重构覆盖）。
@@ -147,7 +148,8 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | :--- | :--- |
 | Normal | 蓝 |
 | Insert | 绿 |
-| Visual / Visual Line | 紫 |
+| Visual | 紫 `#800080` |
+| **Visual-Line** | **紫红 `#FF00FF`** |
 | Vim 关闭（透传） | 红 |
 
 **回到打字提示（橙）**：`Normal --Esc--> Insert` 后 **3s 内**，`Esc` 灯与底部电量灯条改显**橙** `#FF8000`（替换 Insert 绿），之后自动恢复。判据与 `0`=不覆盖 的裁决都在共享层 `vim_insert_flash_color()`（vim 开 + 模式 Insert + Esc 宽限窗口未过期；窗口用 32 位计时，不会因 16 位回绕复活）；只有这一条路径触发，开机 / `Caps` 开启 Vim / `i`/`a`/`o`/`s`/`c` 等进入 Insert 的方式**不亮橙**。亮度与灯数不变（Esc 60%、底条 6% / 按电量）。
