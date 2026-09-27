@@ -251,7 +251,7 @@ make leku/nut65:vim:flash
 
 ## 十一、Vim 功能宏（keymaps/vim/config.h）
 
-启用：`VIM_I_TEXT_OBJECTS`, `VIM_A_TEXT_OBJECTS`, `VIM_G_MOTIONS`, `VIM_PASTE_BEFORE`, `VIM_REPLACE`, `VIM_DOT_REPEAT`, `VIM_NUMBERED_JUMPS`, `BETTER_VISUAL_MODE`
+> 说明：旧引擎的 `VIM_*` 功能宏（`VIM_I_TEXT_OBJECTS`、`BETTER_VISUAL_MODE` 等）**在当前共享层已不存在**；v2 引擎的键位与取舍见 `qmk-vim-fn/vim/readme.md`。
 
 禁用：`VIM_COLON_CMDS`（冒号命令 `:w`/`:q` 完全删除）, `VIM_FOR_MAC`, `VIM_FOR_ALL`, `ONESHOT_VIM`, `VIM_W_BEGINNING_OF_WORD`
 
@@ -269,7 +269,7 @@ make leku/nut65:vim:flash
 
 ## 十四、修复历史（已知问题，均已修复）
 
-- **dd（末行可删）**：`Home`×2 → `Shift+End`（选中本行文本）→ `Ctrl+X`（单次剪切，进剪贴板，`p` 可粘）→ `Backspace`（删掉残留空行的前换行）；`Ndd` 先按 count 扩展选区。**首行会留一个空行**。因剪切+退格是两次主机编辑，引擎用 `vim_extra_undos` 让一次 `u` / 重做自动重复一次，从而一次恢复/重做（切到其它键后失效）。见 `qmk-vim-fn/src/{actions,modes}.c`。
+- **dd（末行可删）**：`Home`×2 → `Shift+End`（选中本行文本）→ `Ctrl+X`（单次剪切，进剪贴板，`p` 可粘）→ `Backspace`（删掉残留空行的前换行）；`Ndd` 先按 count 扩展选区。**首行会留一个空行**。**一次 `u` 只恢复一半**（共享层已取消自动双撤销，`vim_extra_undos` 在新引擎不存在）。见 `qmk-vim-fn/vim/readme.md` 与 `qmk-vim-fn/engine/src/`。
 - **dd 后 k 误删行**：dd 执行完必须调 `normal_mode()` 清 pending，否则 `process_func` 停在 `process_vim_action`、后续 motion 会再触发 delete。Esc 短按/长按在 Normal 模式也先 `normal_mode()` 取消 pending operator。
 - **可视模式（Visual / Visual Line）Esc 退出**：可视模式下 Esc 直接落到 qmk-vim 原生处理（真实 Esc 退出）。
 - **R 替换模式 Esc 无法退出 / 底条不恢复**（V1.0 旧引擎）：`normal_mode_user` 需用强符号覆盖（weak 会随机选中导致 `replace_active` 不清）。**V2.x 起替换模式已不提供**（见第二节），故本条仅作历史记录，橙色现用于「回到打字」提示。
