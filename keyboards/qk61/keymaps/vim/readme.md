@@ -11,7 +11,8 @@
 
 > **版本 V1.0（冻结）**：引擎锁定 `qmk-vim` `v1.0`（子模块 commit `62bb338`），约定锁定 `qmk-myfn` `v1.0`。踩坑/问题记录见 **第十二节**。
 > **版本 V2.9（上一版）**：`Esc` 切换 Insert/Normal（带 3s 宽限）、`Caps` 单击开关 Vim（`Fn+Caps` 无特殊）、右 `Shift` 懒发送（见第二节）。
-> **版本 V2.13（当前）**：`Visual-Line`（`V`）灯色独立为**紫红** `#FF00FF`（与 Visual 的紫 `#800080` 区分）；见第六节。
+> **版本 V2.14（当前）**：`Visual-Line`（`V`）—— 灯色改为**洋红 rose** `#FF0080`（与 Visual 紫 `#800080` 区分）；进入即选中**整行**（`Home`→`Shift+End`）；`y`/`d` 等动作后**退出可视**。
+> **版本 V2.13（上一版）**：`Visual-Line`（`V`）灯色独立为**紫红** `#FF00FF`（与 Visual 的紫 `#800080` 区分）；见第六节。
 > **版本 V2.11（上一版）**：`Caps` 长按改为 **Caps 模式**（规格见 qmk-vim-fn `caps/` 模块）：`1`–`0`/`-`/`=` = `F1`–`F12`（不带 Ctrl），其余键 = `Ctrl+键`，松开退出；不再临时进入 Normal（见第二节）。
 > **版本 V2.10（上一版）**：引擎 `qmk-vim-fn`（子模块 `9fa2a24`，含共享层 `vim_insert_flash()`）。有线 USB 枚举问题见 **第十三节**（P1″ 真因=镜像体积/布局，V2.8 起用 LTO 缩体修复）。**V2.10 行为变更**：`Normal` 空闲按 `Esc` 回到 `Insert` 后 **Esc 灯与 logo 电量灯转橙 `#FF8000` 3s**（与 Esc 宽限窗口同一计时），随后自动回 Insert 绿（见第六节）。
 
@@ -178,7 +179,7 @@ RGB Matrix 64 灯：键位 0–60，logo 三灯 61–63。qk61.c 原有的 Caps 
 | `Esc`(0) | 显示当前 vim 模式色，亮度 **66%**（132/200） |
 | logo 61–63 | 颜色 = 模式色，**亮灯个数 = 电量** |
 
-**模式色**：Vim 关闭 = 红；Normal = 蓝；Insert = 绿；**Visual = 紫 `#800080`；Visual-Line（`V`）= 紫红 `#FF00FF`**；鼠标模式 = 青。
+**模式色**：Vim 关闭 = 红；Normal = 蓝；Insert = 绿；**Visual = 紫 `#800080`；Visual-Line（`V`）= 洋红 rose `#FF0080`**；鼠标模式 = 青。
 
 **回到打字提示（橙）**：`Normal --Esc--> Insert` 后 **3s 内**，Esc 灯与 logo 电量灯改显**橙** `#FF8000`（替换 Insert 绿），之后自动恢复。判据与 `0`=不覆盖 的裁决都在共享层 `vim_insert_flash_color()`（vim 开 + 模式 Insert + Esc 宽限窗口未过期；窗口用 32 位计时，不会因 16 位回绕复活）；只有这一条路径触发，开机 / `Caps` 开启 Vim / `i`/`a`/`o`/`s`/`c` 等进入 Insert 的方式**不亮橙**。亮度与灯数与模式色一致（Esc 66%、logo 按电量）。
 
