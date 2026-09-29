@@ -451,7 +451,7 @@ void housekeeping_task_user(void) {
     }
 
     hs_housekeeping_task_user();
-    vim_keymap_common_task(timer_read());
+    vim_keymap_common_task(timer_read32());
 }
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
