@@ -253,7 +253,7 @@ void matrix_scan_user(void) {
         mcu_reset();
     }
 
-    vim_keymap_common_task(timer_read());
+    vim_keymap_common_task(timer_read32()); /* 形参是 uint32_t：16 位 timer_read() 每 65.5s 会提前发键 */
 }
 
 /* ===== RGB indicator tuning ===== */
